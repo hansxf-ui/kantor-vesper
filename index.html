@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kantor Vesper 🏢</title>
+<style>
+  :root {
+    --bg: #14161f;
+    --sheet: rgba(20, 22, 31, 0.92);
+    --text: #eef0f6;
+    --muted: #9aa0b4;
+    --accent: #2dd4bf;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --slate: #94a3b8;
+    --red: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+  #scene-container { position: fixed; inset: 0; }
+  #scene-container canvas { display: block; }
+
+  #loading {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--muted);
+    font-size: 15px; text-align: center; padding: 24px;
+    z-index: 30;
+  }
+  #loading.hidden { display: none; }
+
+  #sheet {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    max-height: 46vh;
+    background: var(--sheet);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px 16px 0 0;
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    z-index: 20;
+  }
+  #status-card { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #agent-name { font-weight: 700; font-size: 17px; }
+  #state-badge {
+    font-size: 12px; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px;
+    background: var(--slate); color: #10131a;
+  }
+  #state-badge.working { background: var(--green); }
+  #state-badge.idle { background: var(--amber); }
+  #state-badge.sleeping { background: var(--slate); }
+  #activity-text { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  #updated-text { color: var(--muted); font-size: 11px; margin-left: auto; white-space: nowrap; }
+
+  #feed-title { font-size: 13px; font-weight: 700; color: var(--muted); margin: 6px 0; }
+  #feed-list { list-style: none; margin: 0; padding: 0; }
+  #feed-list li {
+    font-size: 13.5px; padding: 7px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex; gap: 8px;
+  }
+  #feed-list .t { color: var(--muted); font-size: 11px; white-space: nowrap; padding-top: 2px; }
+
+  #error-bar {
+    display: none;
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid rgba(248, 113, 113, 0.4);
+    color: var(--red);
+    font-size: 13px; border-radius: 10px;
+    padding: 8px 12px; margin-bottom: 10px;
+  }
+  #error-bar.show { display: block; }
+  #error-bar button {
+    background: none; border: 1px solid var(--red); color: var(--red);
+    border-radius: 8px; padding: 4px 10px; margin-left: 8px;
+    font-size: 12px;
+  }
+  #hint { color: var(--muted); font-size: 11px; text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div id="scene-container"></div>
+
+  <div id="loading">⏳ memuat kantor…</div>
+
+  <div id="sheet">
+    <div id="error-bar">⚠️ <span id="error-text">gagal memuat data.</span><button id="retry-btn" type="button">Coba lagi</button></div>
+    <div id="status-card">
+      <div>
+        <div id="agent-name">Vesper</div>
+        <div id="activity-text">menghubungkan…</div>
+      </div>
+      <span id="state-badge">…</span>
+      <span id="updated-text"></span>
+    </div>
+    <div id="feed-title">aktivitas terakhir</div>
+    <ul id="feed-list"></ul>
+    <div id="hint">drag untuk muter kamera • cubit untuk zoom • ketuk avatar buat detail</div>
+  </div>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/OrbitControls.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/office.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    // Guard: kalau Three.js gagal dimuat, jangan biarkan halaman blank misterius.
+    (function () {
+      if (typeof THREE === "undefined") {
+        var el = document.getElementById("loading");
+        el.classList.remove("hidden");
+        el.textContent = "😢 Three.js gagal dimuat. Coba muat ulang halaman ini.";
+      }
+    })();
+  </script>
+</body>
+</html>
