@@ -330,8 +330,16 @@
     this.onTick(function (dt, t) {
       var a = self.agents[agent.id];
       if (!a) return;
-      // Lerp posisi ~1 detik (tidak teleport).
+      // Lerp posisi ~1 detik + lompat-lompat biar nggak nge-glide kayak hantu.
+      var dist = a.group.position.distanceTo(a.targetPos);
       a.group.position.lerp(a.targetPos, 1 - Math.exp(-3 * dt));
+      if (dist > 0.15) {
+        a.group.position.y = Math.abs(Math.sin(t * 9)) * 0.28;
+        a.group.rotation.z = Math.sin(t * 9) * 0.06;
+      } else {
+        a.group.position.y = 0;
+        a.group.rotation.z = 0;
+      }
       if (a.state === "working") {
         a.parts.armL.rotation.x = -0.9 + Math.sin(t * 10) * 0.18;
         a.parts.armR.rotation.x = -0.9 + Math.sin(t * 10 + 1.3) * 0.18;
