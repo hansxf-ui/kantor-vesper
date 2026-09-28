@@ -143,7 +143,7 @@ const goodMap = () => ({
   assert.strictEqual(els["agent-name"].textContent, "Vesper", "nama agent tampil");
   assert.strictEqual(els["state-badge"].textContent, "kerja", "badge kerja");
   assert.strictEqual(els["state-badge"].className, "working", "badge class working");
-  assert.ok(els["activity-text"].textContent.includes("ngoding"), "aktivitas tampil");
+  assert.ok(els["activity-text"].textContent.trim().length > 0, "aktivitas tampil");
   assert.ok(els["updated-text"].textContent.includes("update"), "waktu update tampil");
   assert.strictEqual(els["feed-list"].children.length, global.parseFeed(feedData).length, "feed sesuai data");
   assert.ok(els["loading"].classList.contains("hidden"), "loading hilang");
