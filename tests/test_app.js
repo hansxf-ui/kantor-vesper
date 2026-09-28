@@ -145,7 +145,7 @@ const goodMap = () => ({
   assert.strictEqual(els["state-badge"].className, "working", "badge class working");
   assert.ok(els["activity-text"].textContent.includes("ngoding"), "aktivitas tampil");
   assert.ok(els["updated-text"].textContent.includes("update"), "waktu update tampil");
-  assert.strictEqual(els["feed-list"].children.length, 2, "feed 2 entri");
+  assert.strictEqual(els["feed-list"].children.length, global.parseFeed(feedData).length, "feed sesuai data");
   assert.ok(els["loading"].classList.contains("hidden"), "loading hilang");
   assert.ok(!els["error-bar"].classList.contains("show"), "error bar sembunyi");
   assert.ok(setStateCalls.some((c) => c[0] === "vesper" && c[1] === "working"), "avatar di-set working");
