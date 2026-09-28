@@ -220,7 +220,24 @@
     })();
   };
 
-  // ============ Avatar (Task 6) ============
+  // ============ Avatar Jolly 3D ============
+  // Blob krem bulet ala avatar Vesper: badan kentang, muka + mata item +
+  // senyum + pipi pink, tangan-kaki buntung. Low-poly, tanpa bulu.
+
+  var JOLLY_CREAM = 0xf2e6c9; // bulu krem
+  var JOLLY_FACE = 0xfdf3dd; // muka lebih terang
+
+  function stubLimb(r, len, px, py, pz) {
+    // Pivot + kapsul (bola di-scale) — tangan/kaki buntung ala Jolly.
+    var g = new THREE.Group();
+    g.position.set(px, py, pz);
+    var m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), mat(JOLLY_CREAM));
+    m.scale.set(1, len / r, 1);
+    m.position.y = -len / 2;
+    m.castShadow = true;
+    g.add(m);
+    return g;
+  }
 
   function textSprite(text, fontPx, padX) {
     var c = document.createElement("canvas");
@@ -242,48 +259,55 @@
     return sp;
   }
 
-  function limb(w, h, d, color, px, py, pz) {
-    // Grup pivot + mesh box (pivot di ujung atas).
-    var g = new THREE.Group();
-    g.position.set(px, py, pz);
-    var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
-    m.position.y = -h / 2 + 0.03;
-    m.castShadow = true;
-    g.add(m);
-    return g;
-  }
-
   OfficeScene.prototype.addAgent = function (agent) {
-    var color = new THREE.Color(agent.warna || "#2dd4bf");
     var g = new THREE.Group();
     g.userData.agentId = agent.id;
 
-    var body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.65, 0.32), mat(color));
+    // Badan kentang
+    var body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 18), mat(JOLLY_CREAM));
+    body.scale.set(1, 1.12, 0.92);
     body.position.y = 0.95;
     body.castShadow = true;
+    body.userData.baseScale = body.scale.clone();
 
-    var head = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.38), mat(0xf2d3b3));
-    head.position.y = 1.5;
-    head.castShadow = true;
-    // Mata: dua kotak kecil di wajah (+z)
+    // Grup muka (dianggukkan saat tidur)
+    var head = new THREE.Group();
+    head.position.set(0, 1.02, 0.1);
+    var face = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 18), mat(JOLLY_FACE));
+    face.scale.set(1, 1.05, 0.55);
+    face.position.set(0, 0.03, 0.22);
     var eyeMat = new THREE.MeshBasicMaterial({ color: 0x1b1e2a });
-    [-0.09, 0.09].forEach(function (x) {
-      var eye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.02), eyeMat);
-      eye.position.set(x, 1.53, 0.2);
-      g.add(eye);
-    });
+    var eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), eyeMat);
+    eyeL.position.set(-0.16, 0.16, 0.46);
+    var eyeR = eyeL.clone();
+    eyeR.position.x = 0.16;
+    // Senyum: setengah donat, lengkung bawah
+    var smile = new THREE.Mesh(
+      new THREE.TorusGeometry(0.09, 0.018, 8, 20, Math.PI),
+      new THREE.MeshBasicMaterial({ color: 0x1b1e2a })
+    );
+    smile.position.set(0, 0.08, 0.47);
+    smile.rotation.z = Math.PI;
+    var blushMat = new THREE.MeshBasicMaterial({ color: 0xf2a0a0 });
+    var blushL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), blushMat);
+    blushL.scale.set(1, 0.7, 0.4);
+    blushL.position.set(-0.28, 0.06, 0.45);
+    var blushR = blushL.clone();
+    blushR.position.x = 0.28;
+    head.add(face, eyeL, eyeR, smile, blushL, blushR);
 
-    var armL = limb(0.16, 0.55, 0.16, color, -0.37, 1.22, 0);
-    var armR = limb(0.16, 0.55, 0.16, color, 0.37, 1.22, 0);
-    var legL = limb(0.2, 0.5, 0.2, 0x2b2f3d, -0.15, 0.55, 0);
-    var legR = limb(0.2, 0.5, 0.2, 0x2b2f3d, 0.15, 0.55, 0);
+    // Tangan & kaki buntung
+    var armL = stubLimb(0.15, 0.42, -0.55, 0.95, 0);
+    var armR = stubLimb(0.15, 0.42, 0.55, 0.95, 0);
+    var legL = stubLimb(0.17, 0.3, -0.2, 0.42, 0.08);
+    var legR = stubLimb(0.17, 0.3, 0.2, 0.42, 0.08);
 
     var tag = textSprite(agent.nama || agent.id, 30);
-    tag.position.y = 2.1;
+    tag.position.y = 1.95;
 
     var zzz = textSprite("Z z z", 34);
     zzz.scale.set(0.9, 0.225, 1);
-    zzz.position.y = 2.3;
+    zzz.position.y = 2.2;
     zzz.visible = false;
 
     g.add(body, head, armL, armR, legL, legR, tag, zzz);
@@ -312,11 +336,13 @@
         a.parts.armL.rotation.x = -0.9 + Math.sin(t * 10) * 0.18;
         a.parts.armR.rotation.x = -0.9 + Math.sin(t * 10 + 1.3) * 0.18;
       } else if (a.state === "idle") {
+        // Napas: scale terhadap baseScale (jangan reset bentuk kentang).
+        var bs = a.parts.body.userData.baseScale;
         var br = 1 + Math.sin(t * 2) * 0.02;
-        a.parts.body.scale.set(1, br, 1);
+        a.parts.body.scale.set(bs.x, bs.y * br, bs.z);
       } else if (a.state === "sleeping") {
         var ph = (t * 0.45) % 1;
-        a.zzz.position.y = 2.35 + ph * 0.9;
+        a.zzz.position.y = 2.25 + ph * 0.9;
         a.zzz.material.opacity = 1 - ph;
       }
     });
@@ -325,17 +351,19 @@
 
   OfficeScene.prototype._applyPose = function (a) {
     var P = a.parts;
-    // Reset dulu
-    P.body.scale.set(1, 1, 1);
+    // Reset dulu (scale kembali ke bentuk kentang)
+    P.body.scale.copy(P.body.userData.baseScale);
     P.body.rotation.x = 0;
     P.head.rotation.x = 0;
     if (a.state === "working") {
       a.targetPos.copy(this.deskSitPos);
       a.group.rotation.y = Math.PI; // menghadap meja (-z)
-      P.legL.rotation.x = -1.35;
-      P.legR.rotation.x = -1.35;
+      P.legL.rotation.x = -1.2;
+      P.legR.rotation.x = -1.2;
       P.armL.rotation.x = -0.9;
       P.armR.rotation.x = -0.9;
+      P.body.rotation.x = -0.06; // sedikit membungkuk ke monitor
+      P.head.rotation.x = 0.15; // menatap layar
       a.zzz.visible = false;
       this.monitorMat.color.setHex(0x9fd8ff); // monitor menyala
     } else if (a.state === "idle") {
@@ -343,9 +371,9 @@
       a.group.rotation.y = 0; // menghadap kamera (+z)
       P.legL.rotation.x = -1.2;
       P.legR.rotation.x = -1.2;
-      P.armL.rotation.x = -0.3;
-      P.armR.rotation.x = -0.3;
-      P.body.rotation.x = 0.12; // selonjor santai
+      P.armL.rotation.x = -0.25;
+      P.armR.rotation.x = -0.25;
+      P.body.rotation.x = 0.1; // selonjor santai
       a.zzz.visible = false;
       this.monitorMat.color.setHex(0x2a2f3d);
     } else {
@@ -354,9 +382,10 @@
       a.group.rotation.y = 0;
       P.legL.rotation.x = -1.2;
       P.legR.rotation.x = -1.2;
-      P.armL.rotation.x = -0.1;
-      P.armR.rotation.x = -0.1;
-      P.head.rotation.x = 0.35; // kepala terkulai
+      P.armL.rotation.x = -0.15;
+      P.armR.rotation.x = -0.15;
+      P.body.rotation.x = 0.15;
+      P.head.rotation.x = 0.35; // muka terkulai
       a.zzz.visible = true;
       this.monitorMat.color.setHex(0x2a2f3d);
     }
