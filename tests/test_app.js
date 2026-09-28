@@ -1,0 +1,209 @@
+// Test wiring app.js: data → UI + avatar, error states, recovery.
+// Fake DOM + stub fetch; THREE/WebGL di-stub seperti test sebelumnya.
+const assert = require("assert");
+const fs = require("fs");
+
+class FakeEl {
+  constructor() {
+    this.textContent = "";
+    this.className = "";
+    this.innerHTML = "";
+    this.children = [];
+    this.style = {};
+    this._listeners = {};
+    this._cls = new Set();
+  }
+  get classList() {
+    const self = this;
+    return {
+      add: (c) => self._cls.add(c),
+      remove: (c) => self._cls.delete(c),
+      contains: (c) => self._cls.has(c),
+    };
+  }
+  appendChild(ch) { this.children.push(ch); }
+  addEventListener(t, fn) { (this._listeners[t] = this._listeners[t] || []).push(fn); }
+  scrollTo() {}
+}
+
+const fakeCtx = {
+  fillRect: () => {}, fillText: () => {},
+  set fillStyle(v) {}, set font(v) {}, set textAlign(v) {}, set textBaseline(v) {},
+};
+const fakeCanvas = {
+  addEventListener: () => {}, style: {},
+  getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 800 }),
+  getContext: () => fakeCtx, width: 256, height: 64,
+};
+
+const THREE = require("../vendor/three.min.js");
+class FakeRenderer {
+  constructor() { this.domElement = fakeCanvas; this.shadowMap = {}; }
+  setPixelRatio() {} setSize() {} render() {}
+}
+class FakeControls {
+  constructor() { this.target = { set: () => {} }; }
+  update() {}
+}
+THREE.WebGLRenderer = FakeRenderer;
+THREE.OrbitControls = FakeControls;
+global.THREE = THREE;
+global.window = { devicePixelRatio: 1, addEventListener: () => {} };
+global.requestAnimationFrame = () => {};
+
+const IDS = ["scene-container", "loading", "sheet", "status-card", "agent-name",
+  "state-badge", "activity-text", "updated-text", "feed-list", "feed-title",
+  "error-bar", "error-text", "retry-btn", "hint"];
+
+let els = {};
+function freshDom() {
+  els = {};
+  IDS.forEach((id) => { els[id] = new FakeEl(); });
+  els["scene-container"].clientWidth = 1280;
+  els["scene-container"].clientHeight = 800;
+  global.document = {
+    getElementById: (id) => els[id] || null,
+    createElement: (tag) => (tag === "canvas" ? fakeCanvas : new FakeEl()),
+    readyState: "complete",
+    addEventListener: () => {},
+  };
+}
+
+function freshModules() {
+  ["../js/data.js", "../js/office.js", "../js/app.js"].forEach((p) => {
+    delete require.cache[require.resolve(p)];
+  });
+  const dc = require("../js/data.js");
+  const off = require("../js/office.js");
+  // Cerminkan environment browser: script tag menaruh semuanya di global.
+  global.DataClient = dc.DataClient;
+  global.parseFeed = dc.parseFeed;
+  global.timeAgo = dc.timeAgo;
+  global.OfficeScene = off.OfficeScene;
+  let captured = null;
+  const setStateCalls = [];
+  const clickCbs = [];
+  dc.DataClient.prototype.startPolling = function (onUpdate, onError) {
+    captured = { onUpdate, onError };
+    return () => {};
+  };
+  const origSet = off.OfficeScene.prototype.setAgentState;
+  off.OfficeScene.prototype.setAgentState = function (id, state) {
+    setStateCalls.push([id, state]);
+    return origSet.call(this, id, state);
+  };
+  const origClick = off.OfficeScene.prototype.onAgentClick;
+  off.OfficeScene.prototype.onAgentClick = function (cb) {
+    clickCbs.push(cb);
+    return origClick.call(this, cb);
+  };
+  const app = require("../js/app.js");
+  return { app, getCaptured: () => captured, setStateCalls, clickCbs };
+}
+
+const repo = __dirname + "/..";
+const agentsData = JSON.parse(fs.readFileSync(repo + "/agents.json", "utf8"));
+const statusData = JSON.parse(fs.readFileSync(repo + "/status/vesper.json", "utf8"));
+const feedData = JSON.parse(fs.readFileSync(repo + "/feed/vesper.json", "utf8"));
+
+function fetchFor(map) {
+  return async (url) => {
+    const path = url.split("?")[0].replace(/^\.\//, "");
+    if (!(path in map)) return { ok: false, status: 404, json: async () => { throw new Error("404"); } };
+    const v = map[path];
+    if (v instanceof Error) throw v;
+    if (v && v.__badJson) return { ok: true, json: async () => { throw new SyntaxError("Unexpected token"); } };
+    return { ok: true, json: async () => JSON.parse(JSON.stringify(v)) };
+  };
+}
+const BAD_JSON = { __badJson: true };
+const ticks = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+
+// Stub fetch mutable: DataClient mengikat fetch saat konstruksi,
+// jadi perilakunya diubah lewat currentMap, bukan ganti global.fetch.
+let currentMap = null;
+global.fetch = (url) => {
+  if (!currentMap) throw new Error("offline");
+  return fetchFor(currentMap)(url);
+};
+const goodMap = () => ({
+  "agents.json": agentsData,
+  "status/vesper.json": statusData,
+  "feed/vesper.json": feedData,
+});
+
+(async () => {
+  // ===== Lifecycle A: happy path + polling + error + retry =====
+  freshDom();
+  currentMap = goodMap();
+  const { app, getCaptured, setStateCalls, clickCbs } = freshModules();
+  app.init();
+  await ticks();
+
+  assert.strictEqual(els["agent-name"].textContent, "Vesper", "nama agent tampil");
+  assert.strictEqual(els["state-badge"].textContent, "kerja", "badge kerja");
+  assert.strictEqual(els["state-badge"].className, "working", "badge class working");
+  assert.ok(els["activity-text"].textContent.includes("ngoding"), "aktivitas tampil");
+  assert.ok(els["updated-text"].textContent.includes("update"), "waktu update tampil");
+  assert.strictEqual(els["feed-list"].children.length, 2, "feed 2 entri");
+  assert.ok(els["loading"].classList.contains("hidden"), "loading hilang");
+  assert.ok(!els["error-bar"].classList.contains("show"), "error bar sembunyi");
+  assert.ok(setStateCalls.some((c) => c[0] === "vesper" && c[1] === "working"), "avatar di-set working");
+  console.log("happy path OK");
+
+  // Klik avatar → kartu disorot
+  assert.strictEqual(clickCbs.length, 1, "click handler terdaftar");
+  clickCbs[0]("vesper");
+  assert.ok(els["status-card"].style.background.includes("45,212,191"), "kartu disorot saat klik avatar");
+  console.log("klik avatar OK");
+
+  // Polling: state berubah working → sleeping
+  const cap = getCaptured();
+  assert.ok(cap, "polling callbacks tercapture");
+  cap.onUpdate({
+    agents: agentsData.agents,
+    statuses: { vesper: Object.assign({}, statusData, { state: "sleeping", activity: "tidur" }) },
+    feeds: { vesper: global.parseFeed(feedData) },
+  });
+  assert.strictEqual(els["state-badge"].textContent, "tidur", "badge ikut berubah");
+  assert.strictEqual(els["state-badge"].className, "sleeping");
+  assert.ok(setStateCalls.some((c) => c[0] === "vesper" && c[1] === "sleeping"), "avatar pose sleeping");
+  console.log("polling state change OK");
+
+  // (a) JSON invalid saat retry → error bar muncul, UI TIDAK berubah
+  currentMap = Object.assign(goodMap(), { "status/vesper.json": BAD_JSON });
+  els["retry-btn"]._listeners.click[0]();
+  await ticks();
+  assert.ok(els["error-bar"].classList.contains("show"), "error bar muncul saat JSON invalid");
+  assert.strictEqual(els["agent-name"].textContent, "Vesper", "UI tidak berubah saat error");
+  assert.strictEqual(els["state-badge"].textContent, "tidur", "badge tidak berubah saat error");
+  console.log("invalid JSON → error bar OK, UI tidak berubah OK");
+
+  // (b) restore → retry → pulih
+  currentMap = goodMap();
+  els["retry-btn"]._listeners.click[0]();
+  await ticks();
+  assert.ok(!els["error-bar"].classList.contains("show"), "error bar hilang setelah pulih");
+  assert.strictEqual(els["state-badge"].textContent, "kerja", "data segar tampil lagi");
+  console.log("recovery OK");
+
+  // ===== Lifecycle B: fetch gagal total sejak awal =====
+  freshDom();
+  currentMap = null;
+  const m2 = freshModules();
+  m2.app.init();
+  await ticks();
+  assert.ok(els["error-bar"].classList.contains("show"), "error bar muncul saat offline");
+  assert.ok(els["error-text"].textContent.includes("coba lagi"), "pesan ajak coba lagi");
+  assert.strictEqual(els["agent-name"].textContent, "", "tidak crash, UI tetap kosong");
+  console.log("initial offline OK");
+
+  // ===== (c) guard vendor hilang ada di index.html =====
+  const html = fs.readFileSync(repo + "/index.html", "utf8");
+  assert.ok(html.includes('typeof THREE === "undefined"'), "guard THREE ada");
+  assert.ok(html.includes("Three.js gagal dimuat"), "pesan jelas saat vendor hilang");
+  assert.ok(html.includes('src="js/app.js"'), "app.js dimuat");
+  console.log("vendor guard OK");
+
+  console.log("app wiring tests PASS");
+})().catch((e) => { console.error("FAIL:", e.message); process.exit(1); });
