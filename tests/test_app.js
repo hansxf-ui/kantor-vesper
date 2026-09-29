@@ -270,6 +270,7 @@ const goodMap = () => ({
   const vesperCalls = m3.setStateCalls.filter((c) => c[0] === "vesper").map((c) => c[1]);
   assert.ok(vesperCalls.includes(statusData.state), "state file tetap diterapkan dulu");
   assert.strictEqual(vesperCalls[vesperCalls.length - 1], "santai", "?vesper=santai menang terakhir");
+  kantor._tickFns.forEach((fn) => fn(0.1, 1)); // jalankan tick mode manual
   assert.ok(kantor._seatOverride && kantor._seatOverride.vesper, "?jam=12 memicu mode makan siang");
   assert.ok(kantor.agents["tamu"], "?tamu=1 memanggil tamu");
   delete global.location;
