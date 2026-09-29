@@ -1557,9 +1557,15 @@
     var bulbMat = new THREE.MeshBasicMaterial({ color: 0x4a4438 });
     var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), bulbMat);
     bulb.position.set(3.95, 1.24, -2.3);
-    var glow = new THREE.PointLight(0xffd9a0, 0, 5);
+    var glow = new THREE.PointLight(0xffd9a0, 0, 6);
     glow.position.set(3.95, 1.2, -2.3);
-    g.add(base, arm, shade, bulb, glow);
+    var haloMat = new THREE.MeshBasicMaterial({
+      color: 0xffd9a0, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    var halo = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), haloMat);
+    halo.position.copy(bulb.position);
+    g.add(base, arm, shade, bulb, halo, glow);
     // Kopi extra + uap (disembunyikan di luar lembur)
     var cupG = new THREE.Group();
     var cup = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.14, 12), mat(0xf5f0e6));
@@ -1577,7 +1583,7 @@
     cupG.visible = false;
     g.add(cupG);
     this.scene.add(g);
-    this._otLamp = { glow: glow, bulbMat: bulbMat };
+    this._otLamp = { glow: glow, bulbMat: bulbMat, haloMat: haloMat };
     this._otCup = cupG;
     this.onTick(function (dt, t) {
       if (!cupG.visible) return;
@@ -1591,8 +1597,9 @@
   };
 
   OfficeScene.prototype._setOvertime = function (on) {
-    this._otLamp.glow.intensity = on ? 1.2 : 0;
+    this._otLamp.glow.intensity = on ? 2 : 0;
     this._otLamp.bulbMat.color.setHex(on ? 0xffe6b0 : 0x4a4438);
+    this._otLamp.haloMat.opacity = on ? 0.35 : 0;
     this._otCup.visible = on;
   };
 
