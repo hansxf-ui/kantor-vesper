@@ -1557,18 +1557,18 @@
     var bulbMat = new THREE.MeshBasicMaterial({ color: 0x4a4438 });
     var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), bulbMat);
     bulb.position.set(3.95, 1.24, -2.3);
-    var glow = new THREE.PointLight(0xffd9a0, 0, 6);
+    var glow = new THREE.PointLight(0xffd9a0, 0, 8);
     glow.position.set(3.95, 1.2, -2.3);
     var haloMat = new THREE.MeshBasicMaterial({
       color: 0xffd9a0, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false,
     });
-    var halo = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), haloMat);
+    var halo = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), haloMat);
     halo.position.copy(bulb.position);
     g.add(base, arm, shade, bulb, halo, glow);
-    // Kopi extra + uap (disembunyikan di luar lembur)
+    // Kopi extra + uap (disembunyikan di luar lembur) — sisi kiri meja, jauh dari badan Vesper
     var cupG = new THREE.Group();
-    var cup = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.14, 12), mat(0xf5f0e6));
+    var cup = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.16, 12), mat(0xf5f0e6));
     cupG.add(cup);
     var steams = [];
     for (var s = 0; s < 4; s++) {
@@ -1579,7 +1579,7 @@
       cupG.add(sm);
       steams.push({ m: sm, ph: s / 4 });
     }
-    cupG.position.set(3.55, 0.87, -1.55);
+    cupG.position.set(2.2, 0.88, -1.6);
     cupG.visible = false;
     g.add(cupG);
     this.scene.add(g);
@@ -1597,9 +1597,9 @@
   };
 
   OfficeScene.prototype._setOvertime = function (on) {
-    this._otLamp.glow.intensity = on ? 2 : 0;
+    this._otLamp.glow.intensity = on ? 3 : 0;
     this._otLamp.bulbMat.color.setHex(on ? 0xffe6b0 : 0x4a4438);
-    this._otLamp.haloMat.opacity = on ? 0.35 : 0;
+    this._otLamp.haloMat.opacity = on ? 0.5 : 0;
     this._otCup.visible = on;
   };
 
