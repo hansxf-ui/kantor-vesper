@@ -51,7 +51,7 @@ console.log("struktur ruang rapat OK");
 // Lampu rapat terdaftar sebagai perabot klik + toggle independen
 const names = s.clickables.map((c) => c.name);
 assert.ok(names.includes("lampu rapat"), `clickables harus ada 'lampu rapat': ${names}`);
-assert.strictEqual(names.length, 7, "total 7 perabot klik");
+assert.strictEqual(names.length, 8, "total 8 perabot klik");
 const lr = s.clickables.find((c) => c.name === "lampu rapat");
 assert.strictEqual(s._lampRapat.glow.intensity, 0.85, "glow rapat awal nyala");
 const hemiBefore = s._hemi.intensity; // milik siklus siang-malam, bukan nilai tetap
