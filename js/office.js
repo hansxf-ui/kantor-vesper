@@ -8,6 +8,8 @@
     this.agents = {}; // id -> { group, parts, state, ... } (diisi Task 6)
     this._clickCb = null;
     this._tickFns = []; // fungsi animasi per-frame: fn(dt, elapsed)
+    this._monitorOn = false; // monitor menyala? (dipakai flicker ambient)
+    this._leaves = null; // daun tanaman (digoyang ambient)
   }
 
   function mat(color) {
@@ -76,6 +78,7 @@
     this._buildDeskArea();
     this._buildSofaArea();
     this._buildDecor();
+    this._buildAmbient();
 
     // Titik duduk avatar (dipakai Task 6)
     this.deskSitPos = new THREE.Vector3(3, 0, -0.6);
@@ -187,6 +190,172 @@
     leaves.castShadow = true;
     g.add(pot, leaves);
     this.scene.add(g);
+    this._leaves = leaves; // digoyang angin di _buildAmbient
+  };
+
+  // ============ Ambient life: bikin kantor berasa hidup ============
+  // Debu melayang, lampu gantung bergoyang, uap kopi, jam dinding
+  // real-time, tanaman bergoyang, awan di jendela, monitor flicker.
+  OfficeScene.prototype._buildAmbient = function () {
+    var self = this;
+
+    // ---- 1. Debu melayang di udara ----
+    var DUST = 70;
+    var dpos = new Float32Array(DUST * 3);
+    var dseed = [];
+    for (var i = 0; i < DUST; i++) {
+      dpos[i * 3] = (Math.random() - 0.5) * 10;
+      dpos[i * 3 + 1] = 0.3 + Math.random() * 3.2;
+      dpos[i * 3 + 2] = (Math.random() - 0.5) * 8;
+      dseed.push(Math.random() * Math.PI * 2);
+    }
+    var dustGeo = new THREE.BufferGeometry();
+    dustGeo.setAttribute("position", new THREE.BufferAttribute(dpos, 3));
+    var dust = new THREE.Points(
+      dustGeo,
+      new THREE.PointsMaterial({
+        color: 0xfff3d6, size: 0.035, transparent: true,
+        opacity: 0.45, sizeAttenuation: true, depthWrite: false,
+      })
+    );
+    this.scene.add(dust);
+    this.onTick(function (dt, t) {
+      var p = dustGeo.attributes.position.array;
+      for (var j = 0; j < DUST; j++) {
+        p[j * 3] += Math.sin(t * 0.4 + dseed[j]) * 0.0015;
+        p[j * 3 + 1] += Math.cos(t * 0.3 + dseed[j] * 1.7) * 0.0012;
+      }
+      dustGeo.attributes.position.needsUpdate = true;
+    });
+
+    // ---- 2. Lampu gantung bergoyang pelan ----
+    var lampG = new THREE.Group();
+    lampG.position.set(0, 4, 0.5);
+    var cord = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 8), mat(0x22242e));
+    cord.position.y = -0.55;
+    var shade = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.42, 0.35, 16, 1, true),
+      mat(0xe08a4e)
+    );
+    shade.position.y = -1.25;
+    shade.castShadow = true;
+    var bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 12, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffe6b0 })
+    );
+    bulb.position.y = -1.38;
+    var glow = new THREE.PointLight(0xffd9a0, 0.85, 11);
+    glow.position.y = -1.4;
+    lampG.add(cord, shade, bulb, glow);
+    this.scene.add(lampG);
+    this.onTick(function (dt, t) {
+      lampG.rotation.z = Math.sin(t * 0.7) * 0.07;
+      lampG.rotation.x = Math.sin(t * 0.53 + 1.2) * 0.05;
+    });
+
+    // ---- 3. Uap naik dari cangkir kopi ----
+    var steams = [];
+    for (var s = 0; s < 6; s++) {
+      var sm = new THREE.Mesh(
+        new THREE.SphereGeometry(0.035, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
+      );
+      sm.position.set(-3, 0.62, 2.9);
+      this.scene.add(sm);
+      steams.push({ m: sm, ph: s / 6 });
+    }
+    this.onTick(function (dt, t) {
+      for (var k = 0; k < steams.length; k++) {
+        var st = steams[k];
+        var ph = (t * 0.25 + st.ph) % 1;
+        st.m.position.y = 0.62 + ph * 0.75;
+        st.m.position.x = -3 + Math.sin((t + st.ph * 6) * 2) * 0.05 * ph;
+        st.m.material.opacity = 0.45 * Math.sin(ph * Math.PI);
+        var sc = 0.6 + ph * 1.4;
+        st.m.scale.set(sc, sc, sc);
+      }
+    });
+
+    // ---- 4. Jam dinding real-time ----
+    var clockG = new THREE.Group();
+    clockG.position.set(4.3, 2.7, -4.88);
+    var face = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.06, 24), mat(0xf5f0e6));
+    face.rotation.x = Math.PI / 2;
+    clockG.add(face);
+    for (var tk = 0; tk < 12; tk++) {
+      var tick = new THREE.Mesh(
+        new THREE.BoxGeometry(0.02, tk % 3 === 0 ? 0.07 : 0.04, 0.01),
+        new THREE.MeshBasicMaterial({ color: 0x22242e })
+      );
+      var ang = (tk / 12) * Math.PI * 2;
+      tick.position.set(Math.sin(ang) * 0.28, Math.cos(ang) * 0.28, 0.035);
+      tick.rotation.z = -ang;
+      clockG.add(tick);
+    }
+    function hand(len, w, color, z) {
+      var g = new THREE.Group();
+      var m = new THREE.Mesh(new THREE.BoxGeometry(w, len, 0.015), new THREE.MeshBasicMaterial({ color: color }));
+      m.position.y = len / 2 - 0.04;
+      g.add(m);
+      g.position.z = z;
+      return g;
+    }
+    var hourH = hand(0.16, 0.045, 0x22242e, 0.04);
+    var minH = hand(0.24, 0.03, 0x22242e, 0.05);
+    var secH = hand(0.26, 0.012, 0xe06c5b, 0.06);
+    clockG.add(hourH, minH, secH);
+    this.scene.add(clockG);
+    var lastSec = -1;
+    this.onTick(function () {
+      var now = new Date();
+      var sec = now.getSeconds() + now.getMilliseconds() / 1000;
+      if (Math.floor(sec) === lastSec) return;
+      lastSec = Math.floor(sec);
+      var mnt = now.getMinutes() + sec / 60;
+      var hr = (now.getHours() % 12) + mnt / 60;
+      secH.rotation.z = -(sec / 60) * Math.PI * 2;
+      minH.rotation.z = -(mnt / 60) * Math.PI * 2;
+      hourH.rotation.z = -(hr / 12) * Math.PI * 2;
+    });
+
+    // ---- 5. Daun tanaman bergoyang ----
+    if (this._leaves) {
+      var leaves = this._leaves;
+      this.onTick(function (dt, t) {
+        leaves.rotation.z = Math.sin(t * 1.3) * 0.06;
+        leaves.rotation.x = Math.cos(t * 0.9) * 0.04;
+      });
+    }
+
+    // ---- 6. Awan bergerak di balik jendela ----
+    var clouds = [];
+    var cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+    for (var c = 0; c < 3; c++) {
+      var cg = new THREE.Group();
+      for (var pf = 0; pf < 3; pf++) {
+        var puff = new THREE.Mesh(new THREE.SphereGeometry(0.22 - pf * 0.04, 10, 8), cloudMat);
+        puff.position.set(pf * 0.28 - 0.28, (pf % 2) * 0.1, 0);
+        puff.scale.y = 0.6;
+        cg.add(puff);
+      }
+      cg.position.set(-2.8 + c * 1.4, 2.2 + (c % 2) * 0.35, -4.86);
+      this.scene.add(cg);
+      clouds.push({ g: cg, speed: 0.08 + c * 0.03 });
+    }
+    this.onTick(function (dt) {
+      for (var ci = 0; ci < clouds.length; ci++) {
+        var cl = clouds[ci];
+        cl.g.position.x += cl.speed * dt;
+        if (cl.g.position.x > 0.6) cl.g.position.x = -3.2;
+      }
+    });
+
+    // ---- 7. Monitor flicker halus saat kerja ----
+    this.onTick(function (dt, t) {
+      if (self._monitorOn) {
+        self.monitorMat.color.setHex(0x9fd8ff).offsetHSL(0, 0, Math.sin(t * 6.3) * 0.025);
+      }
+    });
   };
 
   // Daftarkan fungsi animasi per-frame (dipakai Task 6 untuk avatar).
@@ -374,6 +543,7 @@
       P.head.rotation.x = 0.15; // menatap layar
       a.zzz.visible = false;
       this.monitorMat.color.setHex(0x9fd8ff); // monitor menyala
+      this._monitorOn = true;
     } else if (a.state === "idle") {
       a.targetPos.copy(this.sofaSitPos);
       a.group.rotation.y = 0; // menghadap kamera (+z)
@@ -384,6 +554,7 @@
       P.body.rotation.x = 0.1; // selonjor santai
       a.zzz.visible = false;
       this.monitorMat.color.setHex(0x2a2f3d);
+      this._monitorOn = false;
     } else {
       // sleeping
       a.targetPos.copy(this.sofaSitPos);
@@ -396,6 +567,7 @@
       P.head.rotation.x = 0.35; // muka terkulai
       a.zzz.visible = true;
       this.monitorMat.color.setHex(0x2a2f3d);
+      this._monitorOn = false;
     }
   };
 
