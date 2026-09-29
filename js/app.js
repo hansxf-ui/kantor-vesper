@@ -83,8 +83,12 @@
       );
     }
 
-    // Klik avatar → sorot kartu status.
-    scene.onAgentClick(function () {
+    // Klik avatar → sorot kartu status (Vesper) / sapa (Mochi).
+    scene.onAgentClick(function (id) {
+      if (id === "mochi") {
+        showToast("🍡 Mochi lagi jalan-jalan keliling kantor");
+        return;
+      }
       var card = el("status-card");
       card.style.background = "rgba(45,212,191,0.15)";
       card.style.borderRadius = "10px";
@@ -94,9 +98,9 @@
       el("sheet").scrollTo({ top: 0, behavior: "smooth" });
     });
 
-    // Klik perabot → toast notifikasi.
+    // Toast notifikasi (dipakai klik perabot & sapa Mochi).
     var toastTimer = null;
-    scene.onPropClick(function (msg) {
+    function showToast(msg) {
       var t = el("toast");
       t.textContent = msg;
       t.classList.add("show");
@@ -104,7 +108,8 @@
       toastTimer = setTimeout(function () {
         t.classList.remove("show");
       }, 1800);
-    });
+    }
+    scene.onPropClick(showToast);
 
     el("retry-btn").addEventListener("click", function () {
       client
