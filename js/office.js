@@ -18,6 +18,12 @@
     this._leafWiggle = 0;
     this._targetGoal = null; // kamera: target yang dituju (tombol pindah ruangan)
     this._activeRoom = "kantor";
+    this._lampOn = true; // lampu gantung utama
+    this._lampManual = false; // true kalau user pernah utak-atik manual
+    this._sun = null;
+    this._glassMat = null; // kaca jendela (diwarnai siklus siang-malam)
+    this._cloudMat = null;
+    this._dayNightStamp = -1;
   }
 
   function mat(color) {
@@ -82,6 +88,7 @@
     sun.shadow.camera.top = 10;
     sun.shadow.camera.bottom = -10;
     this.scene.add(sun);
+    this._sun = sun; // dipakai siklus siang-malam
 
     this._buildRoom();
     this._buildDeskArea();
@@ -90,6 +97,7 @@
     this._buildAmbient();
     this._buildMeetingRoom();
     this._buildInteractive();
+    this._buildDayNight();
 
     // Titik duduk avatar (dipakai Task 6)
     this.deskSitPos = new THREE.Vector3(3, 0, -0.6);
@@ -131,6 +139,7 @@
     );
     glass.position.set(-1.5, 2.2, -4.88);
     this.scene.add(frame, glass);
+    this._glassMat = glass.material; // diwarnai siklus siang-malam
   };
 
   OfficeScene.prototype._buildDeskArea = function () {
@@ -348,6 +357,7 @@
     // ---- 6. Awan bergerak di balik jendela ----
     var clouds = [];
     var cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+    this._cloudMat = cloudMat; // diredupkan saat malam
     for (var c = 0; c < 3; c++) {
       var cg = new THREE.Group();
       for (var pf = 0; pf < 3; pf++) {
@@ -517,14 +527,10 @@
       self.clickables.push({ name: name, root: root, action: action, bounce: 0 });
     }
 
-    // Lampu gantung: nyala/mati
-    var lampOn = true;
+    // Lampu gantung: nyala/mati (manual override — siklus siang-malam nggak ikut campur lagi)
     reg(this._lampGroup, "lampu", function () {
-      lampOn = !lampOn;
-      self._lampGlow.intensity = lampOn ? 0.85 : 0;
-      self._lampBulb.material.color.setHex(lampOn ? 0xffe6b0 : 0x4a4438);
-      self._hemi.intensity = lampOn ? 0.85 : 0.35; // ruangan ikut meredup
-      return lampOn ? "💡 lampu dinyalakan" : "💡 lampu dimatikan — hemat listrik";
+      self.setLamp(!self._lampOn, true);
+      return self._lampOn ? "💡 lampu dinyalakan" : "💡 lampu dimatikan — hemat listrik";
     });
 
     // Monitor: ganti wallpaper (cuma pas Jolly kerja)
@@ -580,6 +586,72 @@
       }
       if (self._steamBurst > 0) self._steamBurst = Math.max(0, self._steamBurst - dt * 1.2);
       if (self._leafWiggle > 0) self._leafWiggle = Math.max(0, self._leafWiggle - dt * 1.5);
+    });
+  };
+
+  // ============ Siklus siang-malam (ngikutin jam asli user) ============
+  // Keyframe per jam: warna langit, intensitas cahaya, kaca jendela,
+  // opacity awan, dan status otomatis lampu.
+  var DAY_KEYS = [
+    { h: 0,   sky: 0x0b0e1a, hemi: 0.35, sun: 0.08, glass: 0x16233f, cloud: 0.25, lamp: true },
+    { h: 5,   sky: 0x131a30, hemi: 0.40, sun: 0.12, glass: 0x1c2c4d, cloud: 0.30, lamp: true },
+    { h: 6.5, sky: 0xf0a35e, hemi: 0.70, sun: 0.50, glass: 0xffd9a8, cloud: 0.70, lamp: false },
+    { h: 9,   sky: 0xa8d4f0, hemi: 0.95, sun: 0.85, glass: 0xbfe3ff, cloud: 0.90, lamp: false },
+    { h: 12,  sky: 0x9fd0f5, hemi: 1.00, sun: 1.00, glass: 0xbfe3ff, cloud: 0.90, lamp: false },
+    { h: 16,  sky: 0xa8c8ec, hemi: 0.90, sun: 0.80, glass: 0xbfe3ff, cloud: 0.90, lamp: false },
+    { h: 17.5,sky: 0xf08a5e, hemi: 0.65, sun: 0.45, glass: 0xffc890, cloud: 0.70, lamp: false },
+    { h: 19,  sky: 0x2a2a4a, hemi: 0.45, sun: 0.15, glass: 0x2a3a5e, cloud: 0.35, lamp: true },
+    { h: 21,  sky: 0x0b0e1a, hemi: 0.35, sun: 0.08, glass: 0x16233f, cloud: 0.25, lamp: true },
+    { h: 24,  sky: 0x0b0e1a, hemi: 0.35, sun: 0.08, glass: 0x16233f, cloud: 0.25, lamp: true },
+  ];
+
+  function daySegment(hour) {
+    var h = ((hour % 24) + 24) % 24;
+    var a = DAY_KEYS[0], b = DAY_KEYS[DAY_KEYS.length - 1];
+    for (var i = 0; i < DAY_KEYS.length - 1; i++) {
+      if (h >= DAY_KEYS[i].h && h <= DAY_KEYS[i + 1].h) { a = DAY_KEYS[i]; b = DAY_KEYS[i + 1]; break; }
+    }
+    var span = b.h - a.h || 1;
+    return { a: a, b: b, k: (h - a.h) / span };
+  }
+
+  OfficeScene.prototype.setLamp = function (on, manual) {
+    this._lampOn = !!on;
+    if (manual) this._lampManual = true;
+    if (this._lampGlow) this._lampGlow.intensity = this._lampOn ? 0.85 : 0;
+    if (this._lampBulb) this._lampBulb.material.color.setHex(this._lampOn ? 0xffe6b0 : 0x4a4438);
+  };
+
+  // Terapkan suasana sesuai jam (bisa dipanggil dengan jam eksplisit — dipakai test).
+  OfficeScene.prototype.applyTimeOfDay = function (hour) {
+    var seg = daySegment(hour), a = seg.a, b = seg.b, k = seg.k;
+    function mix(ca, cb) {
+      return new THREE.Color(ca).lerp(new THREE.Color(cb), k);
+    }
+    var sky = mix(a.sky, b.sky);
+    this.scene.background.copy(sky);
+    if (this.scene.fog) this.scene.fog.color.copy(sky);
+    this._hemi.intensity = a.hemi + (b.hemi - a.hemi) * k;
+    if (this._sun) this._sun.intensity = a.sun + (b.sun - a.sun) * k;
+    if (this._glassMat) this._glassMat.color.copy(mix(a.glass, b.glass));
+    if (this._cloudMat) this._cloudMat.opacity = a.cloud + (b.cloud - a.cloud) * k;
+    // Lampu otomatis nyala saat gelap — kecuali user sudah atur manual.
+    if (!this._lampManual) this.setLamp(k < 0.5 ? a.lamp : b.lamp, false);
+  };
+
+  OfficeScene.prototype._buildDayNight = function () {
+    var self = this;
+    var now = new Date();
+    this._dayNightStamp = now.getHours() * 60 + now.getMinutes();
+    this.applyTimeOfDay(now.getHours() + now.getMinutes() / 60);
+    // Cek ulang tiap menit saja (bukan tiap frame).
+    this.onTick(function () {
+      var n = new Date();
+      var stamp = n.getHours() * 60 + n.getMinutes();
+      if (stamp !== self._dayNightStamp) {
+        self._dayNightStamp = stamp;
+        self.applyTimeOfDay(n.getHours() + n.getMinutes() / 60);
+      }
     });
   };
 
@@ -648,11 +720,11 @@
   var JOLLY_CREAM = 0xf2e6c9; // bulu krem
   var JOLLY_FACE = 0xfdf3dd; // muka lebih terang
 
-  function stubLimb(r, len, px, py, pz) {
+  function stubLimb(r, len, px, py, pz, color) {
     // Pivot + kapsul (bola di-scale) — tangan/kaki buntung ala Jolly.
     var g = new THREE.Group();
     g.position.set(px, py, pz);
-    var m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), mat(JOLLY_CREAM));
+    var m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), mat(color === undefined ? JOLLY_CREAM : color));
     m.scale.set(1, len / r, 1);
     m.position.y = -len / 2;
     m.castShadow = true;
@@ -684,8 +756,15 @@
     var g = new THREE.Group();
     g.userData.agentId = agent.id;
 
+    // Warna badan: Vesper tetap krem klasik; agent lain pakai warnanya sendiri.
+    var bodyHex = agent.id === "vesper" || !agent.warna ? JOLLY_CREAM : agent.warna;
+    var faceHex = JOLLY_FACE;
+    if (bodyHex !== JOLLY_CREAM) {
+      faceHex = new THREE.Color(bodyHex).lerp(new THREE.Color(0xffffff), 0.5).getHex();
+    }
+
     // Badan kentang
-    var body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 18), mat(JOLLY_CREAM));
+    var body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 18), mat(bodyHex));
     body.scale.set(1, 1.12, 0.92);
     body.position.y = 0.95;
     body.castShadow = true;
@@ -694,7 +773,7 @@
     // Grup muka (dianggukkan saat tidur)
     var head = new THREE.Group();
     head.position.set(0, 1.02, 0.1);
-    var face = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 18), mat(JOLLY_FACE));
+    var face = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 18), mat(faceHex));
     face.scale.set(1, 1.05, 0.55);
     face.position.set(0, 0.03, 0.22);
     var eyeMat = new THREE.MeshBasicMaterial({ color: 0x1b1e2a });
@@ -718,10 +797,10 @@
     head.add(face, eyeL, eyeR, smile, blushL, blushR);
 
     // Tangan & kaki buntung
-    var armL = stubLimb(0.15, 0.42, -0.55, 0.95, 0);
-    var armR = stubLimb(0.15, 0.42, 0.55, 0.95, 0);
-    var legL = stubLimb(0.17, 0.3, -0.2, 0.42, 0.08);
-    var legR = stubLimb(0.17, 0.3, 0.2, 0.42, 0.08);
+    var armL = stubLimb(0.15, 0.42, -0.55, 0.95, 0, bodyHex);
+    var armR = stubLimb(0.15, 0.42, 0.55, 0.95, 0, bodyHex);
+    var legL = stubLimb(0.17, 0.3, -0.2, 0.42, 0.08, bodyHex);
+    var legR = stubLimb(0.17, 0.3, 0.2, 0.42, 0.08, bodyHex);
 
     var tag = textSprite(agent.nama || agent.id, 30);
     tag.position.y = 1.95;
@@ -732,8 +811,6 @@
     zzz.visible = false;
 
     g.add(body, head, armL, armR, legL, legR, tag, zzz);
-    g.position.copy(this.sofaSitPos);
-    this.scene.add(g);
 
     var rec = {
       id: agent.id,
@@ -743,9 +820,20 @@
       zzz: zzz,
       state: "idle",
       targetPos: this.sofaSitPos.clone(),
+      wander: !!agent.wander,
     };
     this.agents[agent.id] = rec;
-    this._applyPose(rec);
+    if (agent.wander) {
+      // Mochi: spawn di tengah ruangan, langsung jalan-jalan.
+      g.position.set(0, 0, 2.5);
+      rec.targetPos.set(0, 0, 2.5);
+      this._applyPose(rec);
+      this._setupWander(rec);
+    } else {
+      g.position.copy(this.sofaSitPos);
+      this._applyPose(rec);
+    }
+    this.scene.add(g);
 
     var self = this;
     this.onTick(function (dt, t) {
@@ -784,6 +872,15 @@
     P.body.scale.copy(P.body.userData.baseScale);
     P.body.rotation.x = 0;
     P.head.rotation.x = 0;
+    if (a.wander) {
+      // Mochi: pose berdiri santai. targetPos diatur _setupWander — jangan disentuh.
+      P.legL.rotation.x = -0.08;
+      P.legR.rotation.x = -0.08;
+      P.armL.rotation.x = -0.2;
+      P.armR.rotation.x = -0.2;
+      a.zzz.visible = false;
+      return;
+    }
     if (a.state === "working") {
       a.targetPos.copy(this.deskSitPos);
       a.group.rotation.y = Math.PI; // menghadap meja (-z)
@@ -830,8 +927,38 @@
   OfficeScene.prototype.setAgentState = function (id, state) {
     var a = this.agents[id];
     if (!a || (state !== "working" && state !== "idle" && state !== "sleeping")) return;
+    if (a.wander) return; // penjelajah jalan terus, nggak ikut status kerja/tidur
     a.state = state;
     this._applyPose(a);
+  };
+
+  // Mochi jalan-jalan: pilih titik acak di lantai tengah, jalan ke sana
+  // (lompat-lompat via tick umum addAgent), diam sebentar, ulangi.
+  // Selalu menghadap arah jalan.
+  OfficeScene.prototype._setupWander = function (a) {
+    var self = this;
+    var wait = 1.5;
+    function pickTarget() {
+      var x = -1.2 + Math.random() * 2.4;
+      var z = -3.5 + Math.random() * 7.5;
+      var dx = x - a.group.position.x,
+        dz = z - a.group.position.z;
+      if (dx * dx + dz * dz > 0.0025) a.group.rotation.y = Math.atan2(dx, dz);
+      a.targetPos.set(x, 0, z);
+    }
+    pickTarget();
+    this.onTick(function (dt) {
+      if (!self.agents[a.id]) return;
+      var dx = a.targetPos.x - a.group.position.x,
+        dz = a.targetPos.z - a.group.position.z;
+      if (dx * dx + dz * dz < 0.09) {
+        wait -= dt;
+        if (wait <= 0) {
+          wait = 2 + Math.random() * 3;
+          pickTarget();
+        }
+      }
+    });
   };
 
   // Raycast tap → id agent ATAU aksi perabot (dipanggil dari render() saat tap terdeteksi).
