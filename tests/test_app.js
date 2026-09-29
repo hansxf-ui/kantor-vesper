@@ -256,5 +256,22 @@ const goodMap = () => ({
   assert.ok(html.includes('src="js/app.js"'), "app.js dimuat");
   console.log("vendor guard OK");
 
+  // ===== Lifecycle C: query param demo (?cuaca=hujan&vesper=santai) =====
+  freshDom();
+  currentMap = goodMap();
+  global.location = { search: "?cuaca=hujan&vesper=santai" };
+  const m3 = freshModules();
+  m3.app.init();
+  await ticks(12);
+  const kantor = global.window.__kantor;
+  assert.ok(kantor, "__kantor terekspos");
+  assert.strictEqual(kantor.weather, "hujan", "?cuaca=hujan diterapkan");
+  // Param vesper diterapkan SETELAH state file (override menang)
+  const vesperCalls = m3.setStateCalls.filter((c) => c[0] === "vesper").map((c) => c[1]);
+  assert.ok(vesperCalls.includes(statusData.state), "state file tetap diterapkan dulu");
+  assert.strictEqual(vesperCalls[vesperCalls.length - 1], "santai", "?vesper=santai menang terakhir");
+  delete global.location;
+  console.log("query param OK");
+
   console.log("app wiring tests PASS");
 })().catch((e) => { console.error("FAIL:", e.message); process.exit(1); });
