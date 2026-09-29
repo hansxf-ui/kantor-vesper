@@ -98,12 +98,28 @@
     overflow: hidden; text-overflow: ellipsis;
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  #room-btns {
+    position: fixed; top: calc(14px + env(safe-area-inset-top)); right: 14px;
+    display: flex; gap: 6px; z-index: 30;
+  }
+  .room-btn {
+    background: rgba(10, 12, 20, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--text); font-size: 12px; font-weight: 600;
+    padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  }
+  .room-btn.active { border-color: rgba(45, 212, 191, 0.6); color: #2dd4bf; }
 </style>
 </head>
 <body>
   <div id="scene-container"></div>
 
   <div id="toast"></div>
+  <div id="room-btns">
+    <button id="btn-kantor" class="room-btn active" type="button">🏢 Kantor</button>
+    <button id="btn-rapat" class="room-btn" type="button">📋 Rapat</button>
+  </div>
   <div id="loading">⏳ memuat kantor…</div>
 
   <div id="sheet">
