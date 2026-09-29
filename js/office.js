@@ -10,6 +10,12 @@
     this._tickFns = []; // fungsi animasi per-frame: fn(dt, elapsed)
     this._monitorOn = false; // monitor menyala? (dipakai flicker ambient)
     this._leaves = null; // daun tanaman (digoyang ambient)
+    this.clickables = []; // perabot bisa diklik: {name, root, action, bounce}
+    this._propCb = null; // callback toast saat perabot diklik
+    this._screenColor = 0x9fd8ff;
+    this._screenIdx = 0;
+    this._steamBurst = 0;
+    this._leafWiggle = 0;
   }
 
   function mat(color) {
@@ -79,6 +85,7 @@
     this._buildSofaArea();
     this._buildDecor();
     this._buildAmbient();
+    this._buildInteractive();
 
     // Titik duduk avatar (dipakai Task 6)
     this.deskSitPos = new THREE.Vector3(3, 0, -0.6);
@@ -136,6 +143,7 @@
     var screen = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.7), this.monitorMat);
     screen.position.set(3, 1.5, -2.15);
     g.add(screen);
+    this._screenMesh = screen; // bisa diklik (ganti wallpaper)
     // Keyboard
     g.add(box(0.9, 0.04, 0.3, 0x30343f, 3, 0.82, -1.5, null));
     // Kursi: dudukan + sandaran + tiang
@@ -164,6 +172,7 @@
     cup.position.set(-3, 0.54, 2.9);
     cup.castShadow = true;
     g.add(cup);
+    this._cup = cup; // bisa diklik (sruput kopi)
     // Karpet
     var rug = new THREE.Mesh(new THREE.CircleGeometry(1.7, 24), mat(0x51456b));
     rug.rotation.x = -Math.PI / 2;
@@ -248,6 +257,9 @@
     glow.position.y = -1.4;
     lampG.add(cord, shade, bulb, glow);
     this.scene.add(lampG);
+    this._lampGroup = lampG;
+    this._lampGlow = glow;
+    this._lampBulb = bulb;
     this.onTick(function (dt, t) {
       lampG.rotation.z = Math.sin(t * 0.7) * 0.07;
       lampG.rotation.x = Math.sin(t * 0.53 + 1.2) * 0.05;
@@ -264,13 +276,14 @@
       this.scene.add(sm);
       steams.push({ m: sm, ph: s / 6 });
     }
+    this._steamMeshes = steams;
     this.onTick(function (dt, t) {
       for (var k = 0; k < steams.length; k++) {
         var st = steams[k];
         var ph = (t * 0.25 + st.ph) % 1;
         st.m.position.y = 0.62 + ph * 0.75;
         st.m.position.x = -3 + Math.sin((t + st.ph * 6) * 2) * 0.05 * ph;
-        st.m.material.opacity = 0.45 * Math.sin(ph * Math.PI);
+        st.m.material.opacity = 0.45 * Math.sin(ph * Math.PI) * (1 + self._steamBurst);
         var sc = 0.6 + ph * 1.4;
         st.m.scale.set(sc, sc, sc);
       }
@@ -305,6 +318,7 @@
     var secH = hand(0.26, 0.012, 0xe06c5b, 0.06);
     clockG.add(hourH, minH, secH);
     this.scene.add(clockG);
+    this._clockGroup = clockG;
     var lastSec = -1;
     this.onTick(function () {
       var now = new Date();
@@ -322,8 +336,8 @@
     if (this._leaves) {
       var leaves = this._leaves;
       this.onTick(function (dt, t) {
-        leaves.rotation.z = Math.sin(t * 1.3) * 0.06;
-        leaves.rotation.x = Math.cos(t * 0.9) * 0.04;
+        leaves.rotation.z = Math.sin(t * 1.3) * 0.06 + Math.sin(t * 22) * 0.25 * self._leafWiggle;
+        leaves.rotation.x = Math.cos(t * 0.9) * 0.04 + Math.cos(t * 19) * 0.2 * self._leafWiggle;
       });
     }
 
@@ -353,9 +367,78 @@
     // ---- 7. Monitor flicker halus saat kerja ----
     this.onTick(function (dt, t) {
       if (self._monitorOn) {
-        self.monitorMat.color.setHex(0x9fd8ff).offsetHSL(0, 0, Math.sin(t * 6.3) * 0.025);
+        self.monitorMat.color.setHex(self._screenColor).offsetHSL(0, 0, Math.sin(t * 6.3) * 0.025);
       }
     });
+  };
+
+  // ============ Perabot interaktif (klik-klik) ============
+  OfficeScene.prototype._buildInteractive = function () {
+    var self = this;
+    function reg(root, name, action) {
+      if (!root) return;
+      root.traverse(function (o) { o.userData.clickName = name; });
+      self.clickables.push({ name: name, root: root, action: action, bounce: 0 });
+    }
+
+    // Lampu gantung: nyala/mati
+    var lampOn = true;
+    reg(this._lampGroup, "lampu", function () {
+      lampOn = !lampOn;
+      self._lampGlow.intensity = lampOn ? 0.85 : 0;
+      self._lampBulb.material.color.setHex(lampOn ? 0xffe6b0 : 0x4a4438);
+      return lampOn ? "💡 lampu dinyalakan" : "💡 lampu dimatikan — hemat listrik";
+    });
+
+    // Monitor: ganti wallpaper (cuma pas Jolly kerja)
+    var palette = [0x9fd8ff, 0x7fe0c3, 0xc9a7f5, 0xffd27f];
+    var palNames = ["biru", "mint", "ungu", "senja"];
+    reg(this._screenMesh, "monitor", function () {
+      if (!self._monitorOn) return "🖥️ monitor mati — tunggu Jolly kerja dulu";
+      self._screenIdx = (self._screenIdx + 1) % palette.length;
+      self._screenColor = palette[self._screenIdx];
+      return "🖥️ wallpaper ganti: " + palNames[self._screenIdx];
+    });
+
+    // Kopi: sruput → uap ngebul
+    reg(this._cup, "kopi", function () {
+      self._steamBurst = 1.6;
+      return "☕ sruput kopi — mantap";
+    });
+
+    // Jam: kasih tau jam sekarang
+    reg(this._clockGroup, "jam", function () {
+      var n = new Date();
+      var hh = String(n.getHours()).padStart(2, "0");
+      var mm = String(n.getMinutes()).padStart(2, "0");
+      return "🕐 sekarang jam " + hh + "." + mm;
+    });
+
+    // Tanaman: disenggol → goyang heboh
+    reg(this._leaves, "tanaman", function () {
+      self._leafWiggle = 1.4;
+      return "🌱 tanamannya disenggol";
+    });
+
+    // Bounce feedback + decay efek sementara
+    this.onTick(function (dt) {
+      for (var i = 0; i < self.clickables.length; i++) {
+        var c = self.clickables[i];
+        if (c.bounce > 0) {
+          c.bounce -= dt * 2.2;
+          var k = Math.max(0, c.bounce);
+          var s = 1 + Math.sin(k * Math.PI) * 0.12;
+          c.root.scale.set(s, s, s);
+          if (c.bounce <= 0) c.root.scale.set(1, 1, 1);
+        }
+      }
+      if (self._steamBurst > 0) self._steamBurst = Math.max(0, self._steamBurst - dt * 1.2);
+      if (self._leafWiggle > 0) self._leafWiggle = Math.max(0, self._leafWiggle - dt * 1.5);
+    });
+  };
+
+  OfficeScene.prototype.onPropClick = function (cb) {
+    this._propCb = cb;
   };
 
   // Daftarkan fungsi animasi per-frame (dipakai Task 6 untuk avatar).
@@ -378,6 +461,29 @@
     this.renderer.domElement.addEventListener("pointerup", function (e) {
       if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return; // drag, bukan tap
       if (self._pickAgent) self._pickAgent(e);
+    });
+    // Hover: kursor pointer di atas avatar / perabot interaktif (throttle ringan).
+    var lastHover = 0;
+    this.renderer.domElement.addEventListener("pointermove", function (e) {
+      var now = Date.now();
+      if (now - lastHover < 120) return;
+      lastHover = now;
+      var rect = self.renderer.domElement.getBoundingClientRect();
+      var nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      var ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      var ray = new THREE.Raycaster();
+      ray.setFromCamera({ x: nx, y: ny }, self.camera);
+      var targets = Object.keys(self.agents)
+        .map(function (id) {
+          return self.agents[id].group;
+        })
+        .concat(
+          self.clickables.map(function (c) {
+            return c.root;
+          })
+        );
+      var hits = targets.length ? ray.intersectObjects(targets, true) : [];
+      self.renderer.domElement.style.cursor = hits.length ? "pointer" : "";
     });
     (function loop() {
       requestAnimationFrame(loop);
@@ -542,7 +648,9 @@
       P.body.rotation.x = -0.06; // sedikit membungkuk ke monitor
       P.head.rotation.x = 0.15; // menatap layar
       a.zzz.visible = false;
-      this.monitorMat.color.setHex(0x9fd8ff); // monitor menyala
+      this._screenColor = 0x9fd8ff;
+      this._screenIdx = 0;
+      this.monitorMat.color.setHex(this._screenColor); // monitor menyala
       this._monitorOn = true;
     } else if (a.state === "idle") {
       a.targetPos.copy(this.sofaSitPos);
@@ -553,7 +661,8 @@
       P.armR.rotation.x = -0.25;
       P.body.rotation.x = 0.1; // selonjor santai
       a.zzz.visible = false;
-      this.monitorMat.color.setHex(0x2a2f3d);
+      this._screenColor = 0x2a2f3d;
+      this.monitorMat.color.setHex(this._screenColor);
       this._monitorOn = false;
     } else {
       // sleeping
@@ -566,7 +675,8 @@
       P.body.rotation.x = 0.15;
       P.head.rotation.x = 0.35; // muka terkulai
       a.zzz.visible = true;
-      this.monitorMat.color.setHex(0x2a2f3d);
+      this._screenColor = 0x2a2f3d;
+      this.monitorMat.color.setHex(this._screenColor);
       this._monitorOn = false;
     }
   };
@@ -578,21 +688,47 @@
     this._applyPose(a);
   };
 
-  // Raycast tap → id agent (dipanggil dari render() saat tap terdeteksi).
+  // Raycast tap → id agent ATAU aksi perabot (dipanggil dari render() saat tap terdeteksi).
   OfficeScene.prototype._pickAgent = function (e) {
     var rect = this.renderer.domElement.getBoundingClientRect();
     var nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     var ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     var ray = new THREE.Raycaster();
     ray.setFromCamera({ x: nx, y: ny }, this.camera);
-    var groups = Object.keys(this.agents).map(
-      function (id) { return this.agents[id].group; }.bind(this)
-    );
+    var self = this;
+    // 1. Avatar dulu (perilaku lama).
+    var groups = Object.keys(this.agents).map(function (id) {
+      return self.agents[id].group;
+    });
     var hits = ray.intersectObjects(groups, true);
     if (hits.length && this._clickCb) {
       var o = hits[0].object;
       while (o && !o.userData.agentId) o = o.parent;
-      if (o) this._clickCb(o.userData.agentId);
+      if (o) {
+        this._clickCb(o.userData.agentId);
+        return;
+      }
+    }
+    // 2. Perabot interaktif.
+    if (!this.clickables.length) return;
+    var roots = this.clickables.map(function (c) {
+      return c.root;
+    });
+    var ph = ray.intersectObjects(roots, true);
+    if (ph.length) {
+      var p = ph[0].object;
+      while (p && !p.userData.clickName) p = p.parent;
+      if (p) {
+        for (var i = 0; i < this.clickables.length; i++) {
+          var c = this.clickables[i];
+          if (c.name === p.userData.clickName) {
+            c.bounce = 1;
+            var msg = c.action();
+            if (msg && this._propCb) this._propCb(msg);
+            return;
+          }
+        }
+      }
     }
   };
 
