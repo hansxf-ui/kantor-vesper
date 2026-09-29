@@ -116,6 +116,8 @@ const repo = __dirname + "/..";
 const agentsData = JSON.parse(fs.readFileSync(repo + "/agents.json", "utf8"));
 const statusData = JSON.parse(fs.readFileSync(repo + "/status/vesper.json", "utf8"));
 const feedData = JSON.parse(fs.readFileSync(repo + "/feed/vesper.json", "utf8"));
+const mochiStatus = JSON.parse(fs.readFileSync(repo + "/status/mochi.json", "utf8"));
+const mochiFeed = JSON.parse(fs.readFileSync(repo + "/feed/mochi.json", "utf8"));
 
 function fetchFor(map) {
   return async (url) => {
@@ -147,6 +149,8 @@ const goodMap = () => ({
   "agents.json": agentsData,
   "status/vesper.json": statusData,
   "feed/vesper.json": feedData,
+  "status/mochi.json": mochiStatus,
+  "feed/mochi.json": mochiFeed,
 });
 
 (async () => {
@@ -173,6 +177,13 @@ const goodMap = () => ({
   clickCbs[0]("vesper");
   assert.ok(els["status-card"].style.background.includes("45,212,191"), "kartu disorot saat klik avatar");
   console.log("klik avatar OK");
+
+  // Klik Mochi → toast sapaan (bukan sorot kartu)
+  els["toast"].textContent = "";
+  clickCbs[0]("mochi");
+  assert.ok(els["toast"].textContent.includes("Mochi"), "toast sapa Mochi");
+  assert.ok(els["toast"].classList.contains("show"), "toast tampil");
+  console.log("klik mochi OK");
 
   // Tombol ruangan → focusRoom terpanggil + kelas active pindah
   els["btn-rapat"]._listeners.click[0]();
