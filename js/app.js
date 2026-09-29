@@ -124,6 +124,24 @@
     if (btnKantor) btnKantor.addEventListener("click", function () { setRoom("kantor"); });
     if (btnRapat) btnRapat.addEventListener("click", function () { setRoom("rapat"); });
 
+    // Lipat/buka kolom bawah biar pandangan 3D lega (pilihan diingat).
+    var sheetEl = el("sheet"),
+      sheetHandle = el("sheet-handle");
+    function applySheet(collapsed) {
+      if (!sheetEl) return;
+      sheetEl.classList.toggle("collapsed", collapsed);
+      try {
+        localStorage.setItem("kantor-vesper-sheet", collapsed ? "1" : "0");
+      } catch (e) {}
+    }
+    if (sheetHandle)
+      sheetHandle.addEventListener("click", function () {
+        applySheet(!sheetEl.classList.contains("collapsed"));
+      });
+    try {
+      if (localStorage.getItem("kantor-vesper-sheet") === "1") applySheet(true);
+    } catch (e) {}
+
     client.loadAll().then(applyData).catch(onPollError);
     client.startPolling(applyData, onPollError);
     scene.render();
