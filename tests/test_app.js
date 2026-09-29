@@ -58,7 +58,7 @@ global.requestAnimationFrame = () => {};
 const IDS = ["scene-container", "loading", "sheet", "status-card", "agent-name",
   "state-badge", "activity-text", "updated-text", "feed-list", "feed-title",
   "error-bar", "error-text", "retry-btn", "hint", "toast",
-  "room-btns", "btn-kantor", "btn-rapat"];
+  "room-btns", "btn-kantor", "btn-rapat", "sheet-handle"];
 
 let els = {};
 function freshDom() {
@@ -137,6 +137,12 @@ global.fetch = (url) => {
   if (!currentMap) throw new Error("offline");
   return fetchFor(currentMap)(url);
 };
+// localStorage stub: app.js mengingat pilihan lipat kolom.
+global.localStorage = {
+  _s: {},
+  getItem(k) { return this._s[k] || null; },
+  setItem(k, v) { this._s[k] = String(v); },
+};
 const goodMap = () => ({
   "agents.json": agentsData,
   "status/vesper.json": statusData,
@@ -177,6 +183,16 @@ const goodMap = () => ({
   assert.deepStrictEqual(focusCalls, ["rapat", "kantor"], "focusRoom('kantor') terpanggil");
   assert.ok(els["btn-kantor"].classList.contains("active"), "btn kantor aktif lagi");
   console.log("tombol ruangan OK");
+
+  // Handle lipat kolom: klik → collapsed, klik lagi → buka, pilihan tersimpan
+  assert.ok(!els["sheet"].classList.contains("collapsed"), "sheet awal terbuka");
+  els["sheet-handle"]._listeners.click[0]();
+  assert.ok(els["sheet"].classList.contains("collapsed"), "sheet terlipat setelah klik");
+  assert.strictEqual(global.localStorage.getItem("kantor-vesper-sheet"), "1", "pilihan tersimpan");
+  els["sheet-handle"]._listeners.click[0]();
+  assert.ok(!els["sheet"].classList.contains("collapsed"), "sheet terbuka lagi");
+  assert.strictEqual(global.localStorage.getItem("kantor-vesper-sheet"), "0", "pilihan terupdate");
+  console.log("lipat kolom OK");
 
   // Polling: state berubah working → sleeping
   const cap = getCaptured();
