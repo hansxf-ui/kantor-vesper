@@ -84,11 +84,26 @@
     font-size: 12px;
   }
   #hint { color: var(--muted); font-size: 11px; text-align: center; margin-top: 8px; }
+
+  #toast {
+    position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    background: rgba(10, 12, 20, 0.92);
+    border: 1px solid rgba(45, 212, 191, 0.35);
+    color: var(--text); font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 999px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 40; white-space: nowrap; max-width: 92vw;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
   <div id="scene-container"></div>
 
+  <div id="toast"></div>
   <div id="loading">⏳ memuat kantor…</div>
 
   <div id="sheet">
@@ -103,7 +118,7 @@
     </div>
     <div id="feed-title">aktivitas terakhir</div>
     <ul id="feed-list"></ul>
-    <div id="hint">drag untuk muter kamera • cubit untuk zoom • ketuk avatar buat detail</div>
+    <div id="hint">ketuk avatar & perabot buat interaksi • drag untuk muter • cubit untuk zoom</div>
   </div>
 
   <script src="vendor/three.min.js"></script>
