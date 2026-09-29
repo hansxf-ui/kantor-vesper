@@ -16,6 +16,8 @@
     this._screenIdx = 0;
     this._steamBurst = 0;
     this._leafWiggle = 0;
+    this._targetGoal = null; // kamera: target yang dituju (tombol pindah ruangan)
+    this._activeRoom = "kantor";
   }
 
   function mat(color) {
@@ -86,6 +88,7 @@
     this._buildSofaArea();
     this._buildDecor();
     this._buildAmbient();
+    this._buildMeetingRoom();
     this._buildInteractive();
 
     // Titik duduk avatar (dipakai Task 6)
@@ -373,6 +376,138 @@
     });
   };
 
+  // ============ Ruang rapat (ekstensi timur, x 6..11) ============
+  OfficeScene.prototype._buildMeetingRoom = function () {
+    var self = this;
+    var g = new THREE.Group();
+
+    // Lantai
+    var floor = new THREE.Mesh(new THREE.PlaneGeometry(5, 10), mat(0x74604a));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(8.5, 0, 0);
+    floor.receiveShadow = true;
+    g.add(floor);
+
+    // Dinding penyekat x=6 dengan pintu (z -0.8..0.8)
+    var wallMat = mat(0x2e3348);
+    [-2.9, 2.9].forEach(function (z) {
+      var seg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 4.2), wallMat);
+      seg.position.set(6, 2, z);
+      seg.receiveShadow = true;
+      g.add(seg);
+    });
+    var header = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.4, 1.6), wallMat);
+    header.position.set(6, 3.3, 0);
+    g.add(header);
+
+    // Dinding belakang lanjutan (x 6..11) & dinding timur (x=11)
+    var back2 = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 0.2), wallMat);
+    back2.position.set(8.5, 2, -5);
+    back2.receiveShadow = true;
+    g.add(back2);
+    var east = new THREE.Mesh(new THREE.BoxGeometry(0.2, 4, 10), wallMat);
+    east.position.set(11, 2, 0);
+    east.receiveShadow = true;
+    g.add(east);
+
+    // Karpet bundar di bawah meja
+    var rug = new THREE.Mesh(new THREE.CircleGeometry(2.1, 28), mat(0x4a5b6b));
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(8.5, 0.01, 0);
+    rug.receiveShadow = true;
+    g.add(rug);
+
+    // Meja rapat: top + 4 kaki
+    g.add(box(1.5, 0.1, 2.8, 0x8a6f4d, 8.5, 0.72, 0, null));
+    [[7.9, -1.25], [9.1, -1.25], [7.9, 1.25], [9.1, 1.25]].forEach(function (p) {
+      g.add(box(0.1, 0.72, 0.1, 0x5d4c36, p[0], 0.36, p[1], null));
+    });
+
+    // 6 kursi (3 per sisi), warna selang-seling
+    var chairColors = [0x3b4a6b, 0xb3552f];
+    var ci = 0;
+    [-0.95, 0, 0.95].forEach(function (z) {
+      [[7.55, 1], [9.45, -1]].forEach(function (s) {
+        var cc = chairColors[ci++ % 2];
+        g.add(box(0.5, 0.08, 0.5, cc, s[0], 0.45, z, null)); // dudukan
+        g.add(box(0.5, 0.55, 0.08, cc, s[0] - s[1] * 0.27, 0.75, z, null)); // sandaran
+      });
+    });
+    this._meetingChairs = 6;
+
+    // Whiteboard di dinding timur + coretan spidol
+    var wb = new THREE.Group();
+    wb.add(box(0.06, 1.4, 2.4, 0x8a6f4d, 10.88, 1.9, 0, null)); // bingkai
+    var board = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.2), mat(0xf2f2ec));
+    board.rotation.y = -Math.PI / 2;
+    board.position.set(10.84, 1.9, 0);
+    wb.add(board);
+    wb.add(box(0.012, 0.05, 0.7, 0xe06c5b, 10.82, 2.15, -0.45, null)); // garis merah
+    wb.add(box(0.012, 0.05, 0.5, 0x5b9de0, 10.82, 2.0, -0.55, null)); // garis biru
+    wb.add(box(0.012, 0.3, 0.12, 0x7fd08a, 10.82, 1.75, 0.35, null)); // batang 1
+    wb.add(box(0.012, 0.45, 0.12, 0x5b9de0, 10.82, 1.82, 0.55, null)); // batang 2
+    wb.add(box(0.012, 0.6, 0.12, 0xe0c25b, 10.82, 1.9, 0.75, null)); // batang 3
+    wb.add(box(0.12, 0.04, 1.0, 0x8a6f4d, 10.8, 1.18, 0, null)); // tray spidol
+    g.add(wb);
+    this._whiteboard = board;
+
+    // Poster di dinding belakang
+    g.add(box(1.3, 1.0, 0.06, 0x22242e, 8.5, 2.3, -4.88, null));
+    var poster = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.8), mat(0x2dd4bf));
+    poster.position.set(8.5, 2.3, -4.84);
+    g.add(poster);
+
+    // Tanaman sudut
+    var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.22, 0.4, 12), mat(0xa3552f));
+    pot.position.set(10.4, 0.2, -4.3);
+    pot.castShadow = true;
+    var leaves2 = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.1, 8), mat(0x3f8f4f));
+    leaves2.position.set(10.4, 0.95, -4.3);
+    leaves2.castShadow = true;
+    g.add(pot, leaves2);
+
+    // Lampu gantung #2 di atas meja rapat
+    var lampG = new THREE.Group();
+    lampG.position.set(8.5, 4, 0);
+    var cord = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 8), mat(0x22242e));
+    cord.position.y = -0.55;
+    var shade = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.42, 0.35, 16, 1, true),
+      mat(0x4e9de0)
+    );
+    shade.position.y = -1.25;
+    var bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 12, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffe6b0 })
+    );
+    bulb.position.y = -1.38;
+    var glow = new THREE.PointLight(0xffd9a0, 0.85, 7);
+    glow.position.y = -1.4;
+    lampG.add(cord, shade, bulb, glow);
+    g.add(lampG);
+    this._lampRapat = { group: lampG, glow: glow, bulb: bulb };
+
+    this.scene.add(g);
+    this._meetingRoomG = g;
+
+    // Kamera: lerp target saat pindah ruangan
+    this.onTick(function (dt) {
+      if (self._targetGoal) {
+        self.controls.target.lerp(self._targetGoal, Math.min(1, dt * 3));
+        if (self.controls.target.distanceTo(self._targetGoal) < 0.02) {
+          self._targetGoal = null;
+        }
+      }
+    });
+  };
+
+  // Pindah fokus kamera antar ruangan (dipanggil tombol UI).
+  OfficeScene.prototype.focusRoom = function (name) {
+    this._activeRoom = name;
+    this._targetGoal =
+      name === "rapat" ? new THREE.Vector3(8.5, 1, 0) : new THREE.Vector3(0, 1, 0);
+  };
+
   // ============ Perabot interaktif (klik-klik) ============
   OfficeScene.prototype._buildInteractive = function () {
     var self = this;
@@ -420,6 +555,15 @@
     reg(this._leaves, "tanaman", function () {
       self._leafWiggle = 1.4;
       return "🌱 tanamannya disenggol";
+    });
+
+    // Lampu ruang rapat: nyala/mati (independen dari lampu utama)
+    var lampRapatOn = true;
+    reg(this._lampRapat.group, "lampu rapat", function () {
+      lampRapatOn = !lampRapatOn;
+      self._lampRapat.glow.intensity = lampRapatOn ? 0.85 : 0;
+      self._lampRapat.bulb.material.color.setHex(lampRapatOn ? 0xffe6b0 : 0x4a4438);
+      return lampRapatOn ? "💡 lampu rapat dinyalakan" : "💡 lampu rapat dimatikan";
     });
 
     // Bounce feedback + decay efek sementara
