@@ -94,6 +94,18 @@
       el("sheet").scrollTo({ top: 0, behavior: "smooth" });
     });
 
+    // Klik perabot → toast notifikasi.
+    var toastTimer = null;
+    scene.onPropClick(function (msg) {
+      var t = el("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () {
+        t.classList.remove("show");
+      }, 1800);
+    });
+
     el("retry-btn").addEventListener("click", function () {
       client
         .loadAll()
