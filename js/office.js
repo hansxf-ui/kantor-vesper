@@ -69,7 +69,8 @@
     this.controls.dampingFactor = 0.08;
 
     // Cahaya
-    this.scene.add(new THREE.HemisphereLight(0xfff2df, 0x334, 0.85));
+    this._hemi = new THREE.HemisphereLight(0xfff2df, 0x334, 0.85); // diredupkan saat lampu dimatikan
+    this.scene.add(this._hemi);
     var sun = new THREE.DirectionalLight(0xffffff, 0.75);
     sun.position.set(6, 9, 5);
     sun.castShadow = true;
@@ -387,6 +388,7 @@
       lampOn = !lampOn;
       self._lampGlow.intensity = lampOn ? 0.85 : 0;
       self._lampBulb.material.color.setHex(lampOn ? 0xffe6b0 : 0x4a4438);
+      self._hemi.intensity = lampOn ? 0.85 : 0.35; // ruangan ikut meredup
       return lampOn ? "💡 lampu dinyalakan" : "💡 lampu dimatikan — hemat listrik";
     });
 
