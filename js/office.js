@@ -98,10 +98,15 @@
     this._buildMeetingRoom();
     this._buildDining();
     this._buildAquarium();
+    this._buildCat();
     this._buildInteractive();
     this._buildDayNight();
     this._buildWeather();
     this._updateModes();
+    this._buildOvertime();
+    this._buildVacuum();
+    this._buildMisi();
+    this._updateModesR7();
 
     // Titik duduk avatar (dipakai Task 6)
     this.deskSitPos = new THREE.Vector3(3, 0, -0.6);
@@ -608,6 +613,12 @@
       return "🐠 ikannya lagi santai berenang…";
     });
 
+    // Kucing: klik → meong
+    reg(this._cat, "kucing", function () {
+      if (!self._cat.visible) return null;
+      return "🐱 meong!";
+    });
+
     // Bounce feedback + decay efek sementara
     this.onTick(function (dt) {
       for (var i = 0; i < self.clickables.length; i++) {
@@ -812,9 +823,9 @@
   // Paksa cuaca (dipakai test & bisa dipanggil manual).
   OfficeScene.prototype.setWeather = function (w) {
     if (w !== "cerah" && w !== "mendung" && w !== "hujan") return;
+    this._weatherTimer = 90 + Math.random() * 150; // reset selalu, walau cuaca kebetulan sama
     if (this.weather === w) return;
     this.weather = w;
-    this._weatherTimer = 90 + Math.random() * 150;
     if (this._propCb) {
       this._propCb(
         w === "hujan" ? "🌧️ eh, di luar hujan…" :
@@ -1011,6 +1022,7 @@
       var ov = self._seatOverride && self._seatOverride[a.id];
       if (ov) {
         // Ronde 6 — duduk paksa: makan siang / rapat. Abaikan targetPos biasa.
+        // Ronde 7 — sleepy: Mochi tidur di karpet pas Vesper lembur.
         a.group.position.lerp(ov.pos, 1 - Math.exp(-3 * dt));
         a.group.rotation.y = ov.rotY;
         a.group.position.y = 0;
@@ -1021,6 +1033,7 @@
         a.parts.armR.rotation.x = -0.5;
         a.parts.body.rotation.x = 0;
         a.parts.head.rotation.x = 0;
+        a.zzz.visible = !!ov.sleepy;
         return;
       }
       // Lerp posisi ~1 detik + lompat-lompat biar nggak nge-glide kayak hantu.
@@ -1526,6 +1539,248 @@
       }
     });
     return rec;
+  };
+
+  // ============ RONDE 7 ============
+
+  // ---- Lembur: lampu meja + kopi extra (muncul saat kerja jam 22-05) ----
+  OfficeScene.prototype._buildOvertime = function () {
+    var g = new THREE.Group();
+    // Lampu meja kecil di sudut meja kerja
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.05, 12), mat(0x22242e));
+    base.position.set(4.05, 0.83, -2.3);
+    var arm = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), mat(0x22242e));
+    arm.position.set(4.05, 1.05, -2.3);
+    arm.rotation.z = -0.25;
+    var shade = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.16, 12, 1, true), mat(0x4e9de0));
+    shade.position.set(3.95, 1.3, -2.3);
+    var bulbMat = new THREE.MeshBasicMaterial({ color: 0x4a4438 });
+    var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), bulbMat);
+    bulb.position.set(3.95, 1.24, -2.3);
+    var glow = new THREE.PointLight(0xffd9a0, 0, 5);
+    glow.position.set(3.95, 1.2, -2.3);
+    g.add(base, arm, shade, bulb, glow);
+    // Kopi extra + uap (disembunyikan di luar lembur)
+    var cupG = new THREE.Group();
+    var cup = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.14, 12), mat(0xf5f0e6));
+    cupG.add(cup);
+    var steams = [];
+    for (var s = 0; s < 4; s++) {
+      var sm = new THREE.Mesh(
+        new THREE.SphereGeometry(0.03, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
+      );
+      cupG.add(sm);
+      steams.push({ m: sm, ph: s / 4 });
+    }
+    cupG.position.set(3.55, 0.87, -1.55);
+    cupG.visible = false;
+    g.add(cupG);
+    this.scene.add(g);
+    this._otLamp = { glow: glow, bulbMat: bulbMat };
+    this._otCup = cupG;
+    this.onTick(function (dt, t) {
+      if (!cupG.visible) return;
+      for (var k = 0; k < steams.length; k++) {
+        var st = steams[k];
+        var ph = (t * 0.3 + st.ph) % 1;
+        st.m.position.y = 0.1 + ph * 0.6;
+        st.m.material.opacity = 0.45 * Math.sin(ph * Math.PI);
+      }
+    });
+  };
+
+  OfficeScene.prototype._setOvertime = function (on) {
+    this._otLamp.glow.intensity = on ? 1.2 : 0;
+    this._otLamp.bulbMat.color.setHex(on ? 0xffe6b0 : 0x4a4438);
+    this._otCup.visible = on;
+  };
+
+  // ---- Robot vacuum: muter tiap Minggu pagi ----
+  OfficeScene.prototype._buildVacuum = function () {
+    var g = new THREE.Group();
+    var body = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 0.12, 20), mat(0x30343f));
+    body.position.y = 0.1;
+    body.castShadow = true;
+    var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 12), mat(0x4e9de0));
+    lid.position.y = 0.18;
+    var eye = new THREE.Mesh(
+      new THREE.SphereGeometry(0.03, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x7fe0c3 })
+    );
+    eye.position.set(0, 0.12, 0.24);
+    g.add(body, lid, eye);
+    g.visible = false;
+    this.scene.add(g);
+    this._vacuum = g;
+    this._vacTarget = new THREE.Vector3(0, 0, 0);
+  };
+
+  // ---- Kucing jendela: nongol sesekali, ekor goyang, bisa diklik ----
+  OfficeScene.prototype._buildCat = function () {
+    var self = this;
+    var g = new THREE.Group();
+    var orange = mat(0xe09a4e);
+    var body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 12), orange);
+    body.scale.set(1, 1.15, 0.9);
+    body.position.y = 0.28;
+    body.castShadow = true;
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 12), orange);
+    head.position.set(0, 0.62, 0.05);
+    head.castShadow = true;
+    var earG = new THREE.ConeGeometry(0.06, 0.1, 6);
+    var earL = new THREE.Mesh(earG, orange);
+    earL.position.set(-0.08, 0.75, 0.05);
+    var earR = new THREE.Mesh(earG, orange);
+    earR.position.set(0.08, 0.75, 0.05);
+    var eyeM = new THREE.MeshBasicMaterial({ color: 0x22242e });
+    var eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), eyeM);
+    eyeL.position.set(-0.06, 0.64, 0.17);
+    var eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 8), eyeM);
+    eyeR.position.set(0.06, 0.64, 0.17);
+    var tail = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.5, 8), orange);
+    tail.position.set(0.2, 0.25, -0.1);
+    tail.rotation.z = -0.7;
+    g.add(body, head, earL, earR, eyeL, eyeR, tail);
+    g.position.set(-1.5, 0, -4.35);
+    g.rotation.y = Math.PI; // menghadap jendela
+    g.visible = false;
+    this.scene.add(g);
+    this._cat = g;
+    this._catTimer = 200 + Math.random() * 200;
+    this._catShown = 0;
+    this.onTick(function (dt, t) {
+      if (!g.visible) return;
+      tail.rotation.x = Math.sin(t * 3) * 0.35; // ekor goyang
+      head.rotation.y = Math.sin(t * 0.7) * 0.4; // noleh-noheh
+    });
+  };
+
+  OfficeScene.prototype._showCat = function () {
+    if (this._cat.visible) return;
+    this._cat.visible = true;
+    this._catShown = 25; // nongol 25 detik
+    this._toast("🐱 ada kucing oren di jendela!");
+  };
+
+  OfficeScene.prototype._hideCat = function () {
+    this._cat.visible = false;
+    this._catShown = 0;
+  };
+
+  // ---- Papan misi: tulisan ngikutin status Vesper ----
+  OfficeScene.prototype._buildMisi = function () {
+    var board = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.1, 0.08), mat(0x8a6f4d));
+    board.position.set(4.7, 2.1, -4.88);
+    var paper = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.3, 0.9),
+      new THREE.MeshBasicMaterial({ color: 0xf5f0e6 })
+    );
+    paper.position.set(4.7, 2.1, -4.83);
+    this.scene.add(board, paper);
+    this._misiSprite = null;
+    this._misiText = "";
+    this._updateMisi("idle");
+  };
+
+  OfficeScene.prototype._updateMisi = function (state) {
+    var texts = {
+      working: "📝 misi: fokus • ngopi • makan siang",
+      idle: "📝 misi: santai dulu~",
+      sleeping: "📝 misi: 💤 besok aja",
+      meeting: "📝 misi: dengerin rapat",
+    };
+    var txt = texts[state] || texts.idle;
+    if (txt === this._misiText) return;
+    this._misiText = txt;
+    if (this._misiSprite) this.scene.remove(this._misiSprite);
+    var sp = textSprite(txt, 26);
+    sp.scale.set(1.35, 0.34, 1);
+    sp.position.set(4.7, 1.55, -4.8);
+    this.scene.add(sp);
+    this._misiSprite = sp;
+  };
+
+  // ---- Mode manager ronde 7: lembur + vacuum + kucing + papan misi ----
+  OfficeScene.prototype._today = function () {
+    return new Date().getDay();
+  };
+
+  OfficeScene.prototype._updateModesR7 = function () {
+    var self = this;
+    this._overtimeOn = false;
+    this._vacuumOn = false;
+    this._lastMisiState = null;
+    this.onTick(function (dt) {
+      var v = self.agents["vesper"];
+      var m = self.agents["mochi"];
+      // Papan misi ngikutin status (transisi saja)
+      if (v && v.state !== self._lastMisiState) {
+        self._lastMisiState = v.state;
+        self._updateMisi(v.state);
+      }
+      // Lembur: kerja jam 22-05 → lampu meja + kopi extra, Mochi tidur di karpet
+      var h = self._lunchHour();
+      var lemburNow = v && v.state === "working" && (h >= 22 || h < 5);
+      if (lemburNow && !self._seatOverride) {
+        if (!self._overtimeOn) {
+          self._overtimeOn = true;
+          self._setOvertime(true);
+          self._toast("🌙 lembur nih… kopi extra buat Vesper ☕");
+        }
+        self._seatOverride = {
+          mochi: m ? { pos: new THREE.Vector3(-2.0, 0, 2.6), rotY: 0.6, sleepy: true } : null,
+        };
+        if (m) m.targetPos.set(-2.0, 0, 2.6);
+      } else {
+        if (self._overtimeOn) {
+          self._overtimeOn = false;
+          self._setOvertime(false);
+          if (m) {
+            m.zzz.visible = false;
+            self._applyPose(m); // Mochi: _applyPose aman untuk wander (tidak ubah targetPos)
+          }
+          self._toast("🌅 lembur selesai — istirahat sana!");
+        }
+        if (!lemburNow && self._seatOverride && self._seatOverride.mochi && self._seatOverride.mochi.sleepy) {
+          self._seatOverride = null;
+        }
+      }
+      // Robot vacuum: Minggu jam 8-10
+      var vacNow = self._today() === 0 && h >= 8 && h < 10;
+      if (vacNow && !self._vacuumOn) {
+        self._vacuumOn = true;
+        self._vacuum.visible = true;
+        self._vacuum.position.set(0, 0, 0);
+        self._toast("🤖 robot vacuum lagi bersih-bersih!");
+      } else if (!vacNow && self._vacuumOn) {
+        self._vacuumOn = false;
+        self._vacuum.visible = false;
+      }
+      if (self._vacuumOn) {
+        var vc = self._vacuum;
+        var dx = self._vacTarget.x - vc.position.x;
+        var dz = self._vacTarget.z - vc.position.z;
+        if (dx * dx + dz * dz < 0.09) {
+          self._vacTarget.set(-5 + Math.random() * 10, 0, -4 + Math.random() * 8);
+        } else {
+          vc.rotation.y = Math.atan2(dx, dz);
+          vc.position.x += (dx / Math.sqrt(dx * dx + dz * dz)) * dt * 1.2;
+          vc.position.z += (dz / Math.sqrt(dx * dx + dz * dz)) * dt * 1.2;
+        }
+      }
+      // Kucing: tiap 5–9 menit nongol 25 detik
+      if (self._catShown > 0) {
+        self._catShown -= dt;
+        if (self._catShown <= 0) self._hideCat();
+      } else if (!self._cat.visible) {
+        self._catTimer -= dt;
+        if (self._catTimer <= 0) {
+          self._catTimer = 300 + Math.random() * 240;
+          self._showCat();
+        }
+      }
+    });
   };
 
   if (typeof module !== "undefined" && module.exports) {
