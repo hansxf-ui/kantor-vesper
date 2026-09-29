@@ -46,6 +46,16 @@
     padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
     overflow-y: auto;
     z-index: 20;
+    transition: transform 0.3s ease;
+  }
+  #sheet.collapsed { transform: translateY(calc(100% - 62px)); }
+  #sheet-handle {
+    position: sticky; top: -12px; margin: -12px -16px 0; padding: 10px 0 8px;
+    cursor: pointer; text-align: center; background: var(--sheet); z-index: 2;
+  }
+  #sheet-handle span {
+    display: inline-block; width: 44px; height: 5px;
+    border-radius: 999px; background: rgba(255,255,255,0.25);
   }
   #status-card { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   #agent-name { font-weight: 700; font-size: 17px; }
@@ -123,6 +133,7 @@
   <div id="loading">⏳ memuat kantor…</div>
 
   <div id="sheet">
+    <div id="sheet-handle"><span></span></div>
     <div id="error-bar">⚠️ <span id="error-text">gagal memuat data.</span><button id="retry-btn" type="button">Coba lagi</button></div>
     <div id="status-card">
       <div>
@@ -134,7 +145,7 @@
     </div>
     <div id="feed-title">aktivitas terakhir</div>
     <ul id="feed-list"></ul>
-    <div id="hint">ketuk avatar & perabot buat interaksi • drag untuk muter • cubit untuk zoom</div>
+    <div id="hint">ketuk avatar & perabot buat interaksi • drag untuk muter • cubit untuk zoom • ketuk garis atas buat melipat kolom</div>
   </div>
 
   <script src="vendor/three.min.js"></script>
