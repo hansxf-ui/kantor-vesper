@@ -98,6 +98,7 @@
     this._buildMeetingRoom();
     this._buildInteractive();
     this._buildDayNight();
+    this._buildWeather();
 
     // Titik duduk avatar (dipakai Task 6)
     this.deskSitPos = new THREE.Vector3(3, 0, -0.6);
@@ -186,6 +187,20 @@
     cup.castShadow = true;
     g.add(cup);
     this._cup = cup; // bisa diklik (sruput kopi)
+    // Piring kue di sebelah cangkir (bisa diklik → kasih makan Mochi)
+    var plate = new THREE.Group();
+    plate.position.set(-2.55, 0.46, 2.95);
+    var dish = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.04, 16), mat(0xf5f0e6));
+    dish.castShadow = true;
+    plate.add(dish);
+    [[-0.07, 0], [0.08, 0.05], [0, -0.08]].forEach(function (p) {
+      var cookie = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 12), mat(0xc98d4e));
+      cookie.position.set(p[0], 0.045, p[1]);
+      cookie.castShadow = true;
+      plate.add(cookie);
+    });
+    g.add(plate);
+    this._plate = plate;
     // Karpet
     var rug = new THREE.Mesh(new THREE.CircleGeometry(1.7, 24), mat(0x51456b));
     rug.rotation.x = -Math.PI / 2;
@@ -549,6 +564,14 @@
       return "☕ sruput kopi — mantap";
     });
 
+    // Kue: ambil camilan → mode kasih makan, klik Mochi buat nyuapin
+    reg(this._plate, "kue", function () {
+      self._feeding = !self._feeding;
+      return self._feeding
+        ? "🍪 ambil camilan… sekarang klik Mochi!"
+        : "🍪 camilannya dibalikin lagi";
+    });
+
     // Jam: kasih tau jam sekarang
     reg(this._clockGroup, "jam", function () {
       var n = new Date();
@@ -634,6 +657,7 @@
     this._hemi.intensity = a.hemi + (b.hemi - a.hemi) * k;
     if (this._sun) this._sun.intensity = a.sun + (b.sun - a.sun) * k;
     if (this._glassMat) this._glassMat.color.copy(mix(a.glass, b.glass));
+    this._glassBase = this._glassMat ? this._glassMat.color.clone() : null; // cuaca mengalikan dari sini
     if (this._cloudMat) this._cloudMat.opacity = a.cloud + (b.cloud - a.cloud) * k;
     // Lampu otomatis nyala saat gelap — kecuali user sudah atur manual.
     if (!this._lampManual) this.setLamp(k < 0.5 ? a.lamp : b.lamp, false);
@@ -653,6 +677,137 @@
         self.applyTimeOfDay(n.getHours() + n.getMinutes() / 60);
       }
     });
+  };
+
+  // ============ Kasih makan Mochi ============
+  // Klik piring kue → mode feeding; klik Mochi → dia loncat kegirangan + hati-hati.
+  OfficeScene.prototype.tryFeed = function (id) {
+    this._feeding = false;
+    var a = this.agents[id];
+    if (id === "mochi" && a) {
+      a._happy = 2.5;
+      this._spawnHeart(a);
+      return "🍪 Mochi dikasih makan! dia seneng banget 🍡";
+    }
+    return "eh, yang dikasih makan Mochi 😅";
+  };
+
+  OfficeScene.prototype._spawnHeart = function (a) {
+    var self = this;
+    var heart = textSprite("❤️", 44);
+    heart.position.copy(a.group.position);
+    heart.position.y = 2.3;
+    this.scene.add(heart);
+    this._hearts = this._hearts || [];
+    this._hearts.push({ m: heart, life: 0 });
+    if (!this._heartsTick) {
+      this._heartsTick = true;
+      this.onTick(function (dt) {
+        for (var i = self._hearts.length - 1; i >= 0; i--) {
+          var h = self._hearts[i];
+          h.life += dt;
+          h.m.position.y += dt * 0.8;
+          h.m.material.opacity = Math.max(0, 1 - h.life / 1.6);
+          if (h.life > 1.6) {
+            self.scene.remove(h.m);
+            self._hearts.splice(i, 1);
+          }
+        }
+      });
+    }
+  };
+
+  // ============ Cuaca di balik jendela (acak, berubah sendiri) ============
+  // Hujan: rintik Points tepat di depan kaca + petir sesekali + awan menggelap.
+  var _wxTmp = null; // temp color biar nggak alokasi tiap frame
+  OfficeScene.prototype._buildWeather = function () {
+    var self = this;
+    this.weather = "cerah";
+    this._weatherTimer = 60 + Math.random() * 120;
+
+    // Rintik hujan (di depan kaca jendela: x -3.1..0.1, y 1.3..3.1, z -4.8..-4.6)
+    var RAIN = 350;
+    var rpos = new Float32Array(RAIN * 3);
+    for (var i = 0; i < RAIN; i++) {
+      rpos[i * 3] = -3.1 + Math.random() * 3.2;
+      rpos[i * 3 + 1] = 1.3 + Math.random() * 1.8;
+      rpos[i * 3 + 2] = -4.8 + Math.random() * 0.2;
+    }
+    var rainGeo = new THREE.BufferGeometry();
+    rainGeo.setAttribute("position", new THREE.BufferAttribute(rpos, 3));
+    var rainMat = new THREE.PointsMaterial({
+      color: 0xa8c8e8, size: 0.05, transparent: true, opacity: 0, depthWrite: false,
+    });
+    var rain = new THREE.Points(rainGeo, rainMat);
+    rain.visible = false;
+    this.scene.add(rain);
+    this._rain = rain;
+    this._rainMat = rainMat;
+
+    // Kilat petir di luar jendela
+    var bolt = new THREE.PointLight(0xdfe8ff, 0, 20);
+    bolt.position.set(-1.5, 3, -6);
+    this.scene.add(bolt);
+    this._bolt = bolt;
+    this._flash = 0;
+    this._nextFlash = 4;
+
+    this.onTick(function (dt, t) {
+      // Hujan jatuh, reset ke atas
+      if (rainMat.opacity > 0.02) {
+        var p = rainGeo.attributes.position.array;
+        for (var j = 0; j < RAIN; j++) {
+          p[j * 3 + 1] -= 6 * dt;
+          if (p[j * 3 + 1] < 1.2) p[j * 3 + 1] = 3.1;
+        }
+        rainGeo.attributes.position.needsUpdate = true;
+      }
+      // Fade hujan sesuai cuaca
+      var target = self.weather === "hujan" ? 0.85 : 0;
+      rainMat.opacity += (target - rainMat.opacity) * Math.min(1, dt * 1.5);
+      rain.visible = rainMat.opacity > 0.02;
+      // Awan menggelap saat hujan/mendung
+      if (self._cloudMat) {
+        var cc = self.weather === "hujan" ? 0x5a6478 : self.weather === "mendung" ? 0xc9d2e2 : 0xffffff;
+        self._cloudMat.color.lerp(new THREE.Color(cc), Math.min(1, dt * 1.5));
+      }
+      // Kaca jendela ikut redup saat cuaca buruk (base dari siklus siang-malam)
+      if (self._glassMat && self._glassBase) {
+        if (!_wxTmp) _wxTmp = new THREE.Color();
+        var f = self.weather === "hujan" ? 0.5 : self.weather === "mendung" ? 0.75 : 1;
+        _wxTmp.copy(self._glassBase).multiplyScalar(f);
+        self._glassMat.color.lerp(_wxTmp, Math.min(1, dt * 1.5));
+      }
+      // Petir: cuma saat hujan, tiap 2–11 detik
+      if (self.weather === "hujan" && t > self._nextFlash) {
+        self._flash = 1;
+        self._nextFlash = t + 2 + Math.random() * 9;
+      }
+      self._flash *= Math.exp(-9 * dt);
+      bolt.intensity = self._flash * 5;
+      // Ganti cuaca otomatis tiap 1.5–4 menit
+      self._weatherTimer -= dt;
+      if (self._weatherTimer <= 0) self._rollWeather();
+    });
+  };
+
+  OfficeScene.prototype._rollWeather = function () {
+    var r = Math.random();
+    this.setWeather(r < 0.5 ? "cerah" : r < 0.8 ? "mendung" : "hujan");
+  };
+
+  // Paksa cuaca (dipakai test & bisa dipanggil manual).
+  OfficeScene.prototype.setWeather = function (w) {
+    if (w !== "cerah" && w !== "mendung" && w !== "hujan") return;
+    if (this.weather === w) return;
+    this.weather = w;
+    this._weatherTimer = 90 + Math.random() * 150;
+    if (this._propCb) {
+      this._propCb(
+        w === "hujan" ? "🌧️ eh, di luar hujan…" :
+        w === "mendung" ? "⛅ mendung nih di luar" : "☀️ cerah lagi di luar"
+      );
+    }
   };
 
   OfficeScene.prototype.onPropClick = function (cb) {
@@ -821,6 +976,7 @@
       state: "idle",
       targetPos: this.sofaSitPos.clone(),
       wander: !!agent.wander,
+      wanderIfIdle: agent.id === "vesper", // Vesper ikut jalan-jalan pas lagi santai
     };
     this.agents[agent.id] = rec;
     if (agent.wander) {
@@ -849,6 +1005,18 @@
         a.group.position.y = 0;
         a.group.rotation.z = 0;
       }
+      if (a._happy > 0) {
+        // Habis dikasih makan: loncat tinggi + tangan ke atas kegirangan.
+        a._happy -= dt;
+        a.group.position.y = Math.abs(Math.sin(t * 14)) * 0.7;
+        a.parts.armL.rotation.z = 2.6;
+        a.parts.armR.rotation.z = -2.6;
+        a._wasHappy = true;
+      } else if (a._wasHappy) {
+        a._wasHappy = false;
+        a.parts.armL.rotation.z = 0;
+        a.parts.armR.rotation.z = 0;
+      }
       if (a.state === "working") {
         a.parts.armL.rotation.x = -0.9 + Math.sin(t * 10) * 0.18;
         a.parts.armR.rotation.x = -0.9 + Math.sin(t * 10 + 1.3) * 0.18;
@@ -872,8 +1040,9 @@
     P.body.scale.copy(P.body.userData.baseScale);
     P.body.rotation.x = 0;
     P.head.rotation.x = 0;
-    if (a.wander) {
-      // Mochi: pose berdiri santai. targetPos diatur _setupWander — jangan disentuh.
+    if (a.wander || (a.wanderIfIdle && a._wanderInit && a.state === "idle")) {
+      // Penjelajah / Vesper santai: pose berdiri. targetPos diatur _setupWander — jangan disentuh.
+      // (sebelum status idle pertama kali diterapkan, Vesper tetap duduk di sofa)
       P.legL.rotation.x = -0.08;
       P.legR.rotation.x = -0.08;
       P.armL.rotation.x = -0.2;
@@ -927,7 +1096,11 @@
   OfficeScene.prototype.setAgentState = function (id, state) {
     var a = this.agents[id];
     if (!a || (state !== "working" && state !== "idle" && state !== "sleeping")) return;
-    if (a.wander) return; // penjelajah jalan terus, nggak ikut status kerja/tidur
+    if (a.wander) return; // Mochi jalan terus, nggak ikut status kerja/tidur
+    if (a.wanderIfIdle && state === "idle" && !a._wanderInit) {
+      a._wanderInit = true;
+      this._setupWander(a); // Vesper mulai jalan-jalan pas santai
+    }
     a.state = state;
     this._applyPose(a);
   };
@@ -949,6 +1122,7 @@
     pickTarget();
     this.onTick(function (dt) {
       if (!self.agents[a.id]) return;
+      if (a.wanderIfIdle && a.state !== "idle") return; // Vesper: cuma jalan pas santai
       var dx = a.targetPos.x - a.group.position.x,
         dz = a.targetPos.z - a.group.position.z;
       if (dx * dx + dz * dz < 0.09) {
