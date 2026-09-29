@@ -96,9 +96,12 @@
     this._buildDecor();
     this._buildAmbient();
     this._buildMeetingRoom();
+    this._buildDining();
+    this._buildAquarium();
     this._buildInteractive();
     this._buildDayNight();
     this._buildWeather();
+    this._updateModes();
 
     // Titik duduk avatar (dipakai Task 6)
     this.deskSitPos = new THREE.Vector3(3, 0, -0.6);
@@ -490,6 +493,11 @@
     leaves2.position.set(10.4, 0.95, -4.3);
     leaves2.castShadow = true;
     g.add(pot, leaves2);
+    this._plantRapat = leaves2; // ronde 6: ikut goyang
+    this.onTick(function (dt, t) {
+      leaves2.rotation.z = Math.sin(t * 1.1 + 2) * 0.06;
+      leaves2.rotation.x = Math.cos(t * 0.8 + 1) * 0.04;
+    });
 
     // Lampu gantung #2 di atas meja rapat
     var lampG = new THREE.Group();
@@ -593,6 +601,11 @@
       self._lampRapat.glow.intensity = lampRapatOn ? 0.85 : 0;
       self._lampRapat.bulb.material.color.setHex(lampRapatOn ? 0xffe6b0 : 0x4a4438);
       return lampRapatOn ? "💡 lampu rapat dinyalakan" : "💡 lampu rapat dimatikan";
+    });
+
+    // Akuarium: klik → sapa ikan
+    reg(this._aquarium, "akuarium", function () {
+      return "🐠 ikannya lagi santai berenang…";
     });
 
     // Bounce feedback + decay efek sementara
@@ -995,6 +1008,21 @@
     this.onTick(function (dt, t) {
       var a = self.agents[agent.id];
       if (!a) return;
+      var ov = self._seatOverride && self._seatOverride[a.id];
+      if (ov) {
+        // Ronde 6 — duduk paksa: makan siang / rapat. Abaikan targetPos biasa.
+        a.group.position.lerp(ov.pos, 1 - Math.exp(-3 * dt));
+        a.group.rotation.y = ov.rotY;
+        a.group.position.y = 0;
+        a.group.rotation.z = 0;
+        a.parts.legL.rotation.x = -1.2;
+        a.parts.legR.rotation.x = -1.2;
+        a.parts.armL.rotation.x = -0.5;
+        a.parts.armR.rotation.x = -0.5;
+        a.parts.body.rotation.x = 0;
+        a.parts.head.rotation.x = 0;
+        return;
+      }
       // Lerp posisi ~1 detik + lompat-lompat biar nggak nge-glide kayak hantu.
       var dist = a.group.position.distanceTo(a.targetPos);
       a.group.position.lerp(a.targetPos, 1 - Math.exp(-3 * dt));
@@ -1076,6 +1104,20 @@
       this._screenColor = 0x2a2f3d;
       this.monitorMat.color.setHex(this._screenColor);
       this._monitorOn = false;
+    } else if (a.state === "meeting") {
+      // Ronde 6 — rapat: duduk di kursi meja rapat, hadap meja (+x).
+      a.targetPos.set(7.55, 0, 0);
+      a.group.rotation.y = Math.PI / 2;
+      P.legL.rotation.x = -1.2;
+      P.legR.rotation.x = -1.2;
+      P.armL.rotation.x = -0.4;
+      P.armR.rotation.x = -0.4;
+      P.body.rotation.x = 0;
+      P.head.rotation.x = 0.1;
+      a.zzz.visible = false;
+      this._screenColor = 0x2a2f3d;
+      this.monitorMat.color.setHex(this._screenColor);
+      this._monitorOn = false;
     } else {
       // sleeping
       a.targetPos.copy(this.sofaSitPos);
@@ -1095,7 +1137,7 @@
 
   OfficeScene.prototype.setAgentState = function (id, state) {
     var a = this.agents[id];
-    if (!a || (state !== "working" && state !== "idle" && state !== "sleeping")) return;
+    if (!a || (state !== "working" && state !== "idle" && state !== "sleeping" && state !== "meeting")) return;
     if (a.wander) return; // Mochi jalan terus, nggak ikut status kerja/tidur
     if (a.wanderIfIdle && state === "idle" && !a._wanderInit) {
       a._wanderInit = true;
@@ -1123,6 +1165,7 @@
     this.onTick(function (dt) {
       if (!self.agents[a.id]) return;
       if (a.wanderIfIdle && a.state !== "idle") return; // Vesper: cuma jalan pas santai
+      if (self._seatOverride && self._seatOverride[a.id]) return; // ronde 6: lagi duduk (makan/rapat)
       var dx = a.targetPos.x - a.group.position.x,
         dz = a.targetPos.z - a.group.position.z;
       if (dx * dx + dz * dz < 0.09) {
@@ -1177,6 +1220,312 @@
         }
       }
     }
+  };
+
+  // ============ RONDE 6 ============
+
+  // ---- Sudut makan: meja bundar + 2 dingklik + makanan beruap (muncul jam 12-13) ----
+  OfficeScene.prototype._buildDining = function () {
+    var TX = -4.3,
+      TZ = -3.3; // pusat meja
+    var g = new THREE.Group();
+    var top = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.08, 20), mat(0x8a6f4d));
+    top.position.set(TX, 0.6, TZ);
+    top.castShadow = true;
+    var leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.6, 10), mat(0x5d4c36));
+    leg.position.set(TX, 0.3, TZ);
+    g.add(top, leg);
+    [
+      [-4.3, -2.55],
+      [-3.55, -3.3],
+    ].forEach(function (p) {
+      var st = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.2, 0.42, 12), mat(0x3b4a6b));
+      st.position.set(p[0], 0.21, p[1]);
+      st.castShadow = true;
+      g.add(st);
+    });
+    // Makanan: 2 mangkok nasi + ikan bakar, disembunyikan di luar jam makan
+    var food = new THREE.Group();
+    [
+      [-4.48, -3.3],
+      [-4.12, -3.3],
+    ].forEach(function (p) {
+      var bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.1, 0.12, 14), mat(0xf5f0e6));
+      bowl.position.set(p[0], 0.7, p[1]);
+      var rice = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), mat(0xfffdf5));
+      rice.scale.y = 0.45;
+      rice.position.set(p[0], 0.76, p[1]);
+      food.add(bowl, rice);
+    });
+    var fish = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), mat(0xd08a3e));
+    fish.scale.set(1.6, 0.5, 0.7);
+    fish.position.set(TX, 0.68, TZ);
+    food.add(fish);
+    var steams = [];
+    for (var s = 0; s < 8; s++) {
+      var sm = new THREE.Mesh(
+        new THREE.SphereGeometry(0.04, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
+      );
+      sm.position.set(TX, 0.8, TZ);
+      food.add(sm);
+      steams.push({ m: sm, ph: s / 8, ox: ((s % 3) - 1) * 0.18 });
+    }
+    food.visible = false;
+    g.add(food);
+    this.scene.add(g);
+    this._foodGroup = food;
+    this.onTick(function (dt, t) {
+      if (!food.visible) return;
+      for (var k = 0; k < steams.length; k++) {
+        var st = steams[k];
+        var ph = (t * 0.35 + st.ph) % 1;
+        st.m.position.y = 0.8 + ph * 0.9;
+        st.m.position.x = TX + st.ox + Math.sin((t + st.ph * 6) * 2) * 0.06 * ph;
+        st.m.material.opacity = 0.4 * Math.sin(ph * Math.PI);
+        var sc = 0.7 + ph * 1.6;
+        st.m.scale.set(sc, sc, sc);
+      }
+    });
+  };
+
+  // ---- Akuarium: 5 ikan berenang + gelembung + rumput laut goyang ----
+  OfficeScene.prototype._buildAquarium = function () {
+    var AX = 5.2,
+      AZ = 3.8;
+    var g = new THREE.Group();
+    var stand = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 0.9), mat(0x5d4c36));
+    stand.position.set(AX, 0.275, AZ);
+    stand.castShadow = true;
+    g.add(stand);
+    var glass = new THREE.Mesh(
+      new THREE.BoxGeometry(1.5, 0.95, 0.8),
+      new THREE.MeshBasicMaterial({ color: 0xbfe3ff, transparent: true, opacity: 0.18 })
+    );
+    glass.position.set(AX, 1.05, AZ);
+    var water = new THREE.Mesh(
+      new THREE.BoxGeometry(1.42, 0.85, 0.72),
+      new THREE.MeshBasicMaterial({ color: 0x2e7fd0, transparent: true, opacity: 0.45 })
+    );
+    water.position.set(AX, 1.02, AZ);
+    g.add(glass, water);
+    var sand = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.08, 0.72), mat(0xd8c48a));
+    sand.position.set(AX, 0.62, AZ);
+    g.add(sand);
+    var weeds = [];
+    for (var w = 0; w < 3; w++) {
+      var weed = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.4, 6), mat(0x3f8f4f));
+      weed.position.set(AX - 0.5 + w * 0.5, 0.85, AZ + (w % 2) * 0.2 - 0.1);
+      g.add(weed);
+      weeds.push({ m: weed, ph: w * 2.1 });
+    }
+    var fishes = [];
+    var fishCols = [0xff9f43, 0xff6b6b, 0xffd93d, 0x6bcbff, 0xff9f43];
+    for (var f = 0; f < 5; f++) {
+      var fg = new THREE.Group();
+      var fb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), mat(fishCols[f]));
+      fb.scale.set(1.4, 0.8, 0.6);
+      var tail = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 6), mat(fishCols[f]));
+      tail.rotation.z = Math.PI / 2;
+      tail.position.x = -0.16;
+      fg.add(fb, tail);
+      g.add(fg);
+      fishes.push({
+        g: fg,
+        tail: tail,
+        r: 0.35 + (f % 3) * 0.14,
+        sp: 0.5 + f * 0.13,
+        ph: f * 1.3,
+        y: 0.95 + (f % 2) * 0.22,
+      });
+    }
+    var bubbles = [];
+    for (var b = 0; b < 10; b++) {
+      var bb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.02, 6, 6),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })
+      );
+      bb.position.set(AX, 0.7, AZ);
+      g.add(bb);
+      bubbles.push({ m: bb, ph: b / 10, ox: (((b * 37) % 10) - 5) * 0.09 });
+    }
+    this.scene.add(g);
+    this._aquarium = g;
+    this._fishes = fishes;
+    this.onTick(function (dt, t) {
+      for (var i = 0; i < fishes.length; i++) {
+        var fi = fishes[i];
+        var a = t * fi.sp + fi.ph;
+        fi.g.position.set(
+          AX + Math.cos(a) * fi.r,
+          fi.y + Math.sin(t * 2 + fi.ph) * 0.05,
+          AZ + Math.sin(a) * fi.r * 0.55
+        );
+        fi.g.rotation.y = -a;
+        fi.tail.rotation.y = Math.sin(t * 12 + fi.ph) * 0.5;
+      }
+      for (var j = 0; j < bubbles.length; j++) {
+        var bu = bubbles[j];
+        var ph = (t * 0.4 + bu.ph) % 1;
+        bu.m.position.y = 0.7 + ph * 0.7;
+        bu.m.position.x = AX + bu.ox;
+      }
+      for (var k = 0; k < weeds.length; k++) {
+        weeds[k].m.rotation.z = Math.sin(t * 1.8 + weeds[k].ph) * 0.15;
+      }
+    });
+  };
+
+  // ---- Mode manager: makan siang (12-13) + rapat + tamu misterius ----
+  OfficeScene.prototype._lunchHour = function () {
+    return new Date().getHours();
+  };
+
+  OfficeScene.prototype._toast = function (msg) {
+    if (this._propCb) this._propCb(msg);
+  };
+
+  OfficeScene.prototype._updateModes = function () {
+    var self = this;
+    this._seatOverride = null;
+    this._lunchOn = false;
+    this._meetingOn = false;
+    this._guestIn = 150 + Math.random() * 150; // tamu pertama: 2.5–5 mnt
+    var slides = ["📊 Rapat Q3", "💡 3 ide baru", "🚀 gas minggu depan"];
+    this.onTick(function (dt, t) {
+      var v = self.agents["vesper"];
+      var m = self.agents["mochi"];
+      var ov = null;
+      var h = self._lunchHour();
+      var lunchNow = h >= 12 && h < 13 && v && v.state !== "sleeping" && v.state !== "meeting";
+      if (lunchNow) {
+        ov = {
+          vesper: { pos: new THREE.Vector3(-4.3, 0, -2.55), rotY: Math.PI },
+          mochi: m ? { pos: new THREE.Vector3(-3.55, 0, -3.3), rotY: -Math.PI / 2 } : null,
+        };
+        if (!self._lunchOn) {
+          self._lunchOn = true;
+          self._foodGroup.visible = true;
+          if (m) m.targetPos.copy(ov.mochi.pos);
+          if (v) v.targetPos.copy(ov.vesper.pos);
+          self._toast("🍱 jam makan siang! Vesper & Mochi pindah ke meja makan");
+        }
+      } else if (self._lunchOn) {
+        self._lunchOn = false;
+        self._foodGroup.visible = false;
+        if (v) self._applyPose(v); // kembalikan targetPos sesuai state
+        self._toast("💼 makan siang selesai — balik kerja!");
+      }
+      var meetingNow = !lunchNow && v && v.state === "meeting";
+      if (meetingNow) {
+        ov = {
+          vesper: { pos: new THREE.Vector3(7.55, 0, 0), rotY: Math.PI / 2 },
+          mochi: m ? { pos: new THREE.Vector3(9.45, 0, 0.95), rotY: -Math.PI / 2 } : null,
+        };
+        if (!self._meetingOn) {
+          self._meetingOn = true;
+          self._showSlides(true);
+          if (m) m.targetPos.copy(ov.mochi.pos);
+          self._toast("📊 rapat dimulai di ruang rapat");
+        }
+        // Slide presentasi ganti tiap 8 detik
+        if (self._slideSprite) {
+          self._slideTimer += dt;
+          if (self._slideTimer > 8) {
+            self._slideTimer = 0;
+            self._slideIdx = (self._slideIdx + 1) % slides.length;
+            self.scene.remove(self._slideSprite);
+            var sp = textSprite(slides[self._slideIdx], 34);
+            sp.scale.set(2.2, 0.55, 1);
+            sp.position.set(10.7, 1.9, 0);
+            self.scene.add(sp);
+            self._slideSprite = sp;
+          }
+        }
+      } else if (self._meetingOn) {
+        self._meetingOn = false;
+        self._showSlides(false);
+        if (v) self._applyPose(v);
+        self._toast("✅ rapat selesai");
+      }
+      self._seatOverride = ov;
+      // Tamu misterius tiap 4–8 menit (tidak saat Vesper tidur)
+      if (!self.agents["tamu"]) {
+        self._guestIn -= dt;
+        if (self._guestIn <= 0) {
+          self._guestIn = 240 + Math.random() * 240;
+          if (!v || v.state !== "sleeping") self._spawnGuest();
+        }
+      }
+    });
+  };
+
+  OfficeScene.prototype._showSlides = function (on) {
+    if (on && !this._slideSprite) {
+      var sp = textSprite("📊 Rapat Q3", 34);
+      sp.scale.set(2.2, 0.55, 1);
+      sp.position.set(10.7, 1.9, 0);
+      this.scene.add(sp);
+      this._slideSprite = sp;
+      this._slideIdx = 0;
+      this._slideTimer = 0;
+    }
+    if (this._slideSprite) this._slideSprite.visible = on;
+  };
+
+  // ---- Tamu misterius: datang → ngobrol (bubble ...) → pulang ----
+  OfficeScene.prototype._spawnGuest = function () {
+    var self = this;
+    if (this.agents["tamu"]) return null;
+    var names = ["Tamu", "Pak Bos", "Kurir", "Tetangga"];
+    var colors = ["#e0a35b", "#9db4e0", "#c9a7f5", "#7fd08a"];
+    var i = Math.floor(Math.random() * names.length);
+    var rec = this.addAgent({ id: "tamu", nama: names[i], warna: colors[i] });
+    rec.guest = true;
+    rec.state = "idle";
+    rec.group.position.set(5.5, 0, 4.6);
+    rec.group.rotation.y = Math.atan2(2.0 - 5.5, 0.6 - 4.6);
+    rec.targetPos.set(2.0, 0, 0.6);
+    rec.parts.legL.rotation.x = -0.08; // berdiri, bukan duduk
+    rec.parts.legR.rotation.x = -0.08;
+    var bubble = textSprite("💬 ...", 40);
+    bubble.position.y = 2.3;
+    bubble.visible = false;
+    rec.group.add(bubble);
+    rec._bubble = bubble;
+    rec._gPhase = "datang";
+    rec._gT = 0;
+    this._toast("👋 eh, ada tamu mampir!");
+    this.onTick(function (dt) {
+      var a = self.agents["tamu"];
+      if (!a) return;
+      if (a._gPhase === "datang") {
+        if (a.group.position.distanceTo(a.targetPos) < 0.35) {
+          a._gPhase = "ngobrol";
+          a._gT = 9;
+          a._bubble.visible = true;
+        }
+      } else if (a._gPhase === "ngobrol") {
+        a._gT -= dt;
+        var v = self.agents["vesper"];
+        if (v) {
+          var dx = v.group.position.x - a.group.position.x;
+          var dz = v.group.position.z - a.group.position.z;
+          a.group.rotation.y = Math.atan2(dx, dz);
+        }
+        if (a._gT <= 0) {
+          a._gPhase = "pulang";
+          a._bubble.visible = false;
+          a.targetPos.set(5.5, 0, 4.6);
+        }
+      } else if (a._gPhase === "pulang") {
+        if (a.group.position.distanceTo(a.targetPos) < 0.35) {
+          self.scene.remove(a.group);
+          delete self.agents["tamu"];
+        }
+      }
+    });
+    return rec;
   };
 
   if (typeof module !== "undefined" && module.exports) {
