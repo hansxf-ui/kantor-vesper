@@ -1546,40 +1546,53 @@
   // ---- Lembur: lampu meja + kopi extra (muncul saat kerja jam 22-05) ----
   OfficeScene.prototype._buildOvertime = function () {
     var g = new THREE.Group();
-    // Lampu meja kecil di sudut meja kerja
-    var base = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.05, 12), mat(0x22242e));
-    base.position.set(4.05, 0.83, -2.3);
-    var arm = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), mat(0x22242e));
-    arm.position.set(4.05, 1.05, -2.3);
-    arm.rotation.z = -0.25;
-    var shade = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.16, 12, 1, true), mat(0x4e9de0));
-    shade.position.set(3.95, 1.3, -2.3);
+    // Lampu meja CHUNKY di sudut meja kerja — harus kelihatan jelas
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.07, 14), mat(0x22242e));
+    base.position.set(4.0, 0.84, -2.3);
+    var arm = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.65, 8), mat(0x22242e));
+    arm.position.set(4.0, 1.15, -2.3);
+    arm.rotation.z = -0.22;
+    var shade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.22, 0.26, 14, 1, true),
+      new THREE.MeshLambertMaterial({ color: 0x4e9de0, side: THREE.DoubleSide })
+    );
+    shade.position.set(3.88, 1.48, -2.3);
     var bulbMat = new THREE.MeshBasicMaterial({ color: 0x4a4438 });
-    var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), bulbMat);
-    bulb.position.set(3.95, 1.24, -2.3);
-    var glow = new THREE.PointLight(0xffd9a0, 0, 8);
-    glow.position.set(3.95, 1.2, -2.3);
+    var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), bulbMat);
+    bulb.position.set(3.88, 1.4, -2.3);
+    var glow = new THREE.PointLight(0xffc878, 0, 10);
+    glow.position.set(3.88, 1.35, -2.3);
     var haloMat = new THREE.MeshBasicMaterial({
-      color: 0xffd9a0, transparent: true, opacity: 0,
+      color: 0xffc878, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false,
     });
-    var halo = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), haloMat);
+    var halo = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 12), haloMat);
     halo.position.copy(bulb.position);
     g.add(base, arm, shade, bulb, halo, glow);
-    // Kopi extra + uap (disembunyikan di luar lembur) — sisi kiri meja, jauh dari badan Vesper
+    // Kopi extra GEDE + tatakan + uap banyak — sisi kiri meja, jauh dari badan Vesper
     var cupG = new THREE.Group();
-    var cup = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.16, 12), mat(0xf5f0e6));
-    cupG.add(cup);
+    var saucer = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.13, 0.03, 14), mat(0xe8e2d4));
+    saucer.position.y = 0.015;
+    var cup = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.085, 0.2, 14), mat(0xf5f0e6));
+    cup.position.y = 0.13;
+    cupG.add(saucer, cup);
+    var coffee = new THREE.Mesh(
+      new THREE.CircleGeometry(0.09, 14),
+      new THREE.MeshBasicMaterial({ color: 0x4a2c14 })
+    );
+    coffee.rotation.x = -Math.PI / 2;
+    coffee.position.y = 0.225;
+    cupG.add(coffee);
     var steams = [];
-    for (var s = 0; s < 4; s++) {
+    for (var s = 0; s < 6; s++) {
       var sm = new THREE.Mesh(
-        new THREE.SphereGeometry(0.03, 8, 8),
+        new THREE.SphereGeometry(0.04, 8, 8),
         new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
       );
       cupG.add(sm);
-      steams.push({ m: sm, ph: s / 4 });
+      steams.push({ m: sm, ph: s / 6 });
     }
-    cupG.position.set(2.2, 0.88, -1.6);
+    cupG.position.set(2.2, 0.8, -1.6);
     cupG.visible = false;
     g.add(cupG);
     this.scene.add(g);
@@ -1589,17 +1602,18 @@
       if (!cupG.visible) return;
       for (var k = 0; k < steams.length; k++) {
         var st = steams[k];
-        var ph = (t * 0.3 + st.ph) % 1;
-        st.m.position.y = 0.1 + ph * 0.6;
-        st.m.material.opacity = 0.45 * Math.sin(ph * Math.PI);
+        var ph = (t * 0.35 + st.ph) % 1;
+        st.m.position.y = 0.25 + ph * 0.7;
+        st.m.position.x = Math.sin((t + st.ph * 6) * 2) * 0.05;
+        st.m.material.opacity = 0.55 * Math.sin(ph * Math.PI);
       }
     });
   };
 
   OfficeScene.prototype._setOvertime = function (on) {
-    this._otLamp.glow.intensity = on ? 3 : 0;
+    this._otLamp.glow.intensity = on ? 5 : 0;
     this._otLamp.bulbMat.color.setHex(on ? 0xffe6b0 : 0x4a4438);
-    this._otLamp.haloMat.opacity = on ? 0.5 : 0;
+    this._otLamp.haloMat.opacity = on ? 0.6 : 0;
     this._otCup.visible = on;
   };
 
