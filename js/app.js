@@ -77,6 +77,7 @@
       // Override query param (demo/test) — setelah data asli diterapkan.
       if (qCuaca) scene.setWeather(qCuaca);
       if (qVesper) scene.setAgentState("vesper", qVesper);
+      if (qTamu) scene._spawnGuest();
     }
 
     function onPollError() {
@@ -127,12 +128,18 @@
     // Query param demo/test: ?cuaca=hujan & ?vesper=santai
     // Diterapkan di akhir applyData (di bawah) supaya tidak ketimpa hasil fetch,
     // dan bertahan tiap polling 30 dtk.
-    var qCuaca = null, qVesper = null;
+    var qCuaca = null, qVesper = null, qJam = null, qTamu = null;
     try {
       var qp = new URLSearchParams(location.search);
       qCuaca = qp.get("cuaca");
       qVesper = qp.get("vesper");
+      qJam = qp.get("jam");
+      qTamu = qp.get("tamu");
     } catch (e) { /* abaikan */ }
+    if (qJam) {
+      // Demo/test: paksa jam (mis. ?jam=12 → mode makan siang langsung aktif)
+      scene._lunchHour = function () { return parseInt(qJam, 10) || 0; };
+    }
 
     el("retry-btn").addEventListener("click", function () {
       client
