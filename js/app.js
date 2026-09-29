@@ -84,7 +84,12 @@
     }
 
     // Klik avatar → sorot kartu status (Vesper) / sapa (Mochi).
+    // Kalau lagi bawa camilan, klik avatar = nyuapin.
     scene.onAgentClick(function (id) {
+      if (scene._feeding) {
+        showToast(scene.tryFeed(id));
+        return;
+      }
       if (id === "mochi") {
         showToast("🍡 Mochi lagi jalan-jalan keliling kantor");
         return;
