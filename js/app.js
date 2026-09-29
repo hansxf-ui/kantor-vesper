@@ -113,6 +113,17 @@
         .catch(onPollError);
     });
 
+    // Tombol pindah ruangan → geser fokus kamera.
+    var btnKantor = el("btn-kantor"),
+      btnRapat = el("btn-rapat");
+    function setRoom(name) {
+      scene.focusRoom(name);
+      if (btnKantor) btnKantor.classList.toggle("active", name === "kantor");
+      if (btnRapat) btnRapat.classList.toggle("active", name === "rapat");
+    }
+    if (btnKantor) btnKantor.addEventListener("click", function () { setRoom("kantor"); });
+    if (btnRapat) btnRapat.addEventListener("click", function () { setRoom("rapat"); });
+
     client.loadAll().then(applyData).catch(onPollError);
     client.startPolling(applyData, onPollError);
     scene.render();
