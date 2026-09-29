@@ -54,9 +54,10 @@ assert.ok(names.includes("lampu rapat"), `clickables harus ada 'lampu rapat': ${
 assert.strictEqual(names.length, 6, "total 6 perabot klik");
 const lr = s.clickables.find((c) => c.name === "lampu rapat");
 assert.strictEqual(s._lampRapat.glow.intensity, 0.85, "glow rapat awal nyala");
+const hemiBefore = s._hemi.intensity; // milik siklus siang-malam, bukan nilai tetap
 lr.action();
 assert.strictEqual(s._lampRapat.glow.intensity, 0, "glow rapat mati setelah toggle");
-assert.strictEqual(s._hemi.intensity, 0.85, "lampu utama tidak ikut terpengaruh");
+assert.strictEqual(s._hemi.intensity, hemiBefore, "lampu utama tidak ikut terpengaruh");
 lr.action();
 assert.strictEqual(s._lampRapat.glow.intensity, 0.85, "glow rapat nyala lagi");
 console.log("lampu rapat OK");
