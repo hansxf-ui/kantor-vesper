@@ -75,10 +75,14 @@ assert.strictEqual(rec.parts.head.rotation.x, 0.35);
 assert.strictEqual(s.monitorMat.color.getHex(), 0x2a2f3d, "monitor redup saat sleeping");
 console.log("sleeping OK");
 
-// --- idle kembali ---
+// --- idle kembali: Vesper jalan-jalan (pose berdiri, target = waypoint acak) ---
 s.setAgentState("vesper", "idle");
 assert.strictEqual(rec.zzz.visible, false);
-assert.ok(rec.targetPos.distanceTo(s.sofaSitPos) < 1e-6);
+assert.ok(
+  Math.abs(rec.parts.legL.rotation.x - -0.08) < 1e-9,
+  `kaki berdiri saat idle: ${rec.parts.legL.rotation.x}`
+);
+assert.ok(rec.targetPos.distanceTo(s.sofaSitPos) > 0.1, "target bukan sofa (lagi jalan-jalan)");
 console.log("idle OK");
 
 // --- klik avatar via raycast ---
