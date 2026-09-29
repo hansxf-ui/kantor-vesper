@@ -5,7 +5,14 @@
 const assert = require("assert");
 
 // --- Stub DOM minimal ---
-const fakeCanvas = { addEventListener: () => {}, style: {} };
+const fakeCtx = {
+  fillRect: () => {}, fillText: () => {},
+  set fillStyle(v) {}, set font(v) {}, set textAlign(v) {}, set textBaseline(v) {},
+};
+const fakeCanvas = {
+  addEventListener: () => {}, style: {},
+  getContext: () => fakeCtx, width: 256, height: 64,
+};
 const fakeContainer = {
   clientWidth: 1280,
   clientHeight: 800,
@@ -18,6 +25,7 @@ global.window = {
 };
 global.document = {
   getElementById: (id) => (id === "scene-container" ? fakeContainer : null),
+  createElement: (tag) => (tag === "canvas" ? fakeCanvas : {}),
 };
 
 // --- THREE + stub WebGL/controls ---
