@@ -42,7 +42,7 @@ assert.strictEqual(s.init(), true);
 
 // 6 perabot terdaftar (5 lama + lampu rapat)
 const names = s.clickables.map((c) => c.name).sort();
-assert.deepStrictEqual(names, ["jam", "kopi", "kue", "lampu", "lampu rapat", "monitor", "tanaman"], `clickables: ${names}`);
+assert.deepStrictEqual(names, ["akuarium", "jam", "kopi", "kue", "lampu", "lampu rapat", "monitor", "tanaman"], `clickables: ${names}`);
 console.log("registrasi 5 perabot OK");
 
 const msgs = [];
