@@ -78,6 +78,7 @@
       if (qCuaca) scene.setWeather(qCuaca);
       if (qVesper) scene.setAgentState("vesper", qVesper);
       if (qTamu) scene._spawnGuest();
+      if (qKucing) scene._showCat();
     }
 
     function onPollError() {
@@ -128,17 +129,23 @@
     // Query param demo/test: ?cuaca=hujan & ?vesper=santai
     // Diterapkan di akhir applyData (di bawah) supaya tidak ketimpa hasil fetch,
     // dan bertahan tiap polling 30 dtk.
-    var qCuaca = null, qVesper = null, qJam = null, qTamu = null;
+    var qCuaca = null, qVesper = null, qJam = null, qTamu = null, qHari = null, qKucing = null;
     try {
       var qp = new URLSearchParams(location.search);
       qCuaca = qp.get("cuaca");
       qVesper = qp.get("vesper");
       qJam = qp.get("jam");
       qTamu = qp.get("tamu");
+      qHari = qp.get("hari");
+      qKucing = qp.get("kucing");
     } catch (e) { /* abaikan */ }
     if (qJam) {
       // Demo/test: paksa jam (mis. ?jam=12 → mode makan siang langsung aktif)
       scene._lunchHour = function () { return parseInt(qJam, 10) || 0; };
+    }
+    if (qHari) {
+      // Demo/test: paksa hari (0 = Minggu → robot vacuum)
+      scene._today = function () { return parseInt(qHari, 10); };
     }
 
     el("retry-btn").addEventListener("click", function () {
