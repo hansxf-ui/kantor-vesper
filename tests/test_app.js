@@ -259,7 +259,7 @@ const goodMap = () => ({
   // ===== Lifecycle C: query param demo (?cuaca=hujan&vesper=santai) =====
   freshDom();
   currentMap = goodMap();
-  global.location = { search: "?cuaca=hujan&vesper=santai" };
+  global.location = { search: "?cuaca=hujan&vesper=santai&jam=12&tamu=1" };
   const m3 = freshModules();
   m3.app.init();
   await ticks(12);
@@ -270,6 +270,8 @@ const goodMap = () => ({
   const vesperCalls = m3.setStateCalls.filter((c) => c[0] === "vesper").map((c) => c[1]);
   assert.ok(vesperCalls.includes(statusData.state), "state file tetap diterapkan dulu");
   assert.strictEqual(vesperCalls[vesperCalls.length - 1], "santai", "?vesper=santai menang terakhir");
+  assert.ok(kantor._seatOverride && kantor._seatOverride.vesper, "?jam=12 memicu mode makan siang");
+  assert.ok(kantor.agents["tamu"], "?tamu=1 memanggil tamu");
   delete global.location;
   console.log("query param OK");
 
