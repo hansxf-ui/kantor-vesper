@@ -20,6 +20,7 @@
   function init() {
     if (typeof THREE === "undefined" || typeof OfficeScene === "undefined") return;
     var scene = new OfficeScene("scene-container");
+    window.__kantor = scene; // hook debug: __kantor.setWeather('hujan') dll.
     if (!scene.init()) return; // pesan fallback WebGL sudah ditampilkan init()
     el("loading").classList.add("hidden");
 
