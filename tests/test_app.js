@@ -259,7 +259,7 @@ const goodMap = () => ({
   // ===== Lifecycle C: query param demo (?cuaca=hujan&vesper=santai) =====
   freshDom();
   currentMap = goodMap();
-  global.location = { search: "?cuaca=hujan&vesper=santai&jam=12&tamu=1" };
+  global.location = { search: "?cuaca=hujan&vesper=santai&jam=12&tamu=1&hari=0&kucing=1" };
   const m3 = freshModules();
   m3.app.init();
   await ticks(12);
@@ -273,6 +273,8 @@ const goodMap = () => ({
   kantor._tickFns.forEach((fn) => fn(0.1, 1)); // jalankan tick mode manual
   assert.ok(kantor._seatOverride && kantor._seatOverride.vesper, "?jam=12 memicu mode makan siang");
   assert.ok(kantor.agents["tamu"], "?tamu=1 memanggil tamu");
+  assert.strictEqual(kantor._today(), 0, "?hari=0 memaksa hari Minggu");
+  assert.strictEqual(kantor._cat.visible, true, "?kucing=1 memunculkan kucing");
   delete global.location;
   console.log("query param OK");
 
