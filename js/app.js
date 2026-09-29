@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  var STATE_LABEL = { working: "kerja", idle: "santai", sleeping: "tidur" };
+  var STATE_LABEL = { working: "kerja", idle: "santai", sleeping: "tidur", meeting: "rapat" };
 
   function el(id) {
     return document.getElementById(id);
@@ -96,6 +96,10 @@
       }
       if (id === "mochi") {
         showToast("🍡 Mochi lagi jalan-jalan keliling kantor");
+        return;
+      }
+      if (scene.agents[id] && scene.agents[id].guest) {
+        showToast("👋 hai, selamat datang tamu!");
         return;
       }
       var card = el("status-card");
