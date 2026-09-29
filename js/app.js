@@ -74,6 +74,9 @@
         if (st0) renderStatus(first, st0);
         renderFeed(data.feeds[first.id] || []);
       }
+      // Override query param (demo/test) — setelah data asli diterapkan.
+      if (qCuaca) scene.setWeather(qCuaca);
+      if (qVesper) scene.setAgentState("vesper", qVesper);
     }
 
     function onPollError() {
@@ -116,6 +119,16 @@
       }, 1800);
     }
     scene.onPropClick(showToast);
+
+    // Query param demo/test: ?cuaca=hujan & ?vesper=santai
+    // Diterapkan di akhir applyData (di bawah) supaya tidak ketimpa hasil fetch,
+    // dan bertahan tiap polling 30 dtk.
+    var qCuaca = null, qVesper = null;
+    try {
+      var qp = new URLSearchParams(location.search);
+      qCuaca = qp.get("cuaca");
+      qVesper = qp.get("vesper");
+    } catch (e) { /* abaikan */ }
 
     el("retry-btn").addEventListener("click", function () {
       client
