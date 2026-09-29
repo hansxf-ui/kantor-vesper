@@ -49,7 +49,8 @@ s.setAgentState("vesper", "working");
 
 s._tickFns.forEach((fn) => fn(0.1, 1));
 assert.strictEqual(s._overtimeOn, true, "mode lembur aktif jam 23");
-assert.strictEqual(s._otLamp.glow.intensity, 2, "lampu meja menyala");
+assert.strictEqual(s._otLamp.glow.intensity, 3, "lampu meja menyala");
+assert.strictEqual(s._otLamp.haloMat.opacity, 0.5, "halo menyala");
 assert.strictEqual(s._otCup.visible, true, "kopi extra muncul");
 assert.ok(toasts.some((m) => m.includes("lembur")), `toast lembur: ${toasts}`);
 console.log("overtime start OK");
