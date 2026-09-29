@@ -162,14 +162,17 @@ const goodMap = () => ({
   await ticks();
 
   assert.strictEqual(els["agent-name"].textContent, "Vesper", "nama agent tampil");
-  assert.strictEqual(els["state-badge"].textContent, "kerja", "badge kerja");
-  assert.strictEqual(els["state-badge"].className, "working", "badge class working");
+  // Ekspektasi diturunkan dari isi status/vesper.json (file live, isinya bisa berubah).
+  var STATE_LABEL = { working: "kerja", idle: "santai", sleeping: "tidur" };
+  var expLabel = STATE_LABEL[statusData.state] || statusData.state;
+  assert.strictEqual(els["state-badge"].textContent, expLabel, "badge ikut state file");
+  assert.strictEqual(els["state-badge"].className, statusData.state, "badge class ikut state file");
   assert.ok(els["activity-text"].textContent.trim().length > 0, "aktivitas tampil");
   assert.ok(els["updated-text"].textContent.includes("update"), "waktu update tampil");
   assert.strictEqual(els["feed-list"].children.length, global.parseFeed(feedData).length, "feed sesuai data");
   assert.ok(els["loading"].classList.contains("hidden"), "loading hilang");
   assert.ok(!els["error-bar"].classList.contains("show"), "error bar sembunyi");
-  assert.ok(setStateCalls.some((c) => c[0] === "vesper" && c[1] === "working"), "avatar di-set working");
+  assert.ok(setStateCalls.some((c) => c[0] === "vesper" && c[1] === statusData.state), "avatar di-set sesuai state file");
   console.log("happy path OK");
 
   // Klik avatar → kartu disorot
@@ -232,7 +235,7 @@ const goodMap = () => ({
   els["retry-btn"]._listeners.click[0]();
   await ticks();
   assert.ok(!els["error-bar"].classList.contains("show"), "error bar hilang setelah pulih");
-  assert.strictEqual(els["state-badge"].textContent, "kerja", "data segar tampil lagi");
+  assert.strictEqual(els["state-badge"].textContent, expLabel, "data segar tampil lagi");
   console.log("recovery OK");
 
   // ===== Lifecycle B: fetch gagal total sejak awal =====
