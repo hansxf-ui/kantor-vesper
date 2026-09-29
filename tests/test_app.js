@@ -18,6 +18,10 @@ class FakeEl {
     return {
       add: (c) => self._cls.add(c),
       remove: (c) => self._cls.delete(c),
+      toggle: (c, force) => {
+        const on = force === undefined ? !self._cls.has(c) : !!force;
+        if (on) self._cls.add(c); else self._cls.delete(c);
+      },
       contains: (c) => self._cls.has(c),
     };
   }
@@ -53,7 +57,8 @@ global.requestAnimationFrame = () => {};
 
 const IDS = ["scene-container", "loading", "sheet", "status-card", "agent-name",
   "state-badge", "activity-text", "updated-text", "feed-list", "feed-title",
-  "error-bar", "error-text", "retry-btn", "hint"];
+  "error-bar", "error-text", "retry-btn", "hint", "toast",
+  "room-btns", "btn-kantor", "btn-rapat"];
 
 let els = {};
 function freshDom() {
@@ -97,8 +102,14 @@ function freshModules() {
     clickCbs.push(cb);
     return origClick.call(this, cb);
   };
+  const focusCalls = [];
+  const origFocus = off.OfficeScene.prototype.focusRoom;
+  off.OfficeScene.prototype.focusRoom = function (name) {
+    focusCalls.push(name);
+    return origFocus.call(this, name);
+  };
   const app = require("../js/app.js");
-  return { app, getCaptured: () => captured, setStateCalls, clickCbs };
+  return { app, getCaptured: () => captured, setStateCalls, clickCbs, focusCalls };
 }
 
 const repo = __dirname + "/..";
@@ -136,7 +147,7 @@ const goodMap = () => ({
   // ===== Lifecycle A: happy path + polling + error + retry =====
   freshDom();
   currentMap = goodMap();
-  const { app, getCaptured, setStateCalls, clickCbs } = freshModules();
+  const { app, getCaptured, setStateCalls, clickCbs, focusCalls } = freshModules();
   app.init();
   await ticks();
 
@@ -156,6 +167,16 @@ const goodMap = () => ({
   clickCbs[0]("vesper");
   assert.ok(els["status-card"].style.background.includes("45,212,191"), "kartu disorot saat klik avatar");
   console.log("klik avatar OK");
+
+  // Tombol ruangan → focusRoom terpanggil + kelas active pindah
+  els["btn-rapat"]._listeners.click[0]();
+  assert.deepStrictEqual(focusCalls, ["rapat"], "focusRoom('rapat') terpanggil");
+  assert.ok(els["btn-rapat"].classList.contains("active"), "btn rapat aktif");
+  assert.ok(!els["btn-kantor"].classList.contains("active"), "btn kantor nonaktif");
+  els["btn-kantor"]._listeners.click[0]();
+  assert.deepStrictEqual(focusCalls, ["rapat", "kantor"], "focusRoom('kantor') terpanggil");
+  assert.ok(els["btn-kantor"].classList.contains("active"), "btn kantor aktif lagi");
+  console.log("tombol ruangan OK");
 
   // Polling: state berubah working → sleeping
   const cap = getCaptured();
